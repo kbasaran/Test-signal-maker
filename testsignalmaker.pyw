@@ -23,7 +23,7 @@ from signal_tools import TestSignal, make_fade_window_n
 import logging
 logging.basicConfig(level=logging.INFO)
 
-release_version = "0.1.3"
+release_version = "0.1.3+"
 
 
 class FileImportDialog(qtw.QDialog):
@@ -985,7 +985,7 @@ class MainWindow(qtw.QMainWindow):
 
         # Main UI code goes here
         self.setMinimumWidth(1024)
-        self.setWindowTitle("Loudspeaker Test Signal Maker[*]" + " - v" + release_version)
+        self.setWindowTitle("Test Signal Maker[*]" + " - v" + release_version)
 
         def write_sys_params_to_registry(sys_params):
             settings = qtc.QSettings('kbasaran', 'Test signal maker')

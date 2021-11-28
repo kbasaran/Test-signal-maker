@@ -1,4 +1,4 @@
-# Loudspeaker-Test-Signal-Maker
+# Test-Signal-Maker
 Required packages:
 scipy
 acoustics
