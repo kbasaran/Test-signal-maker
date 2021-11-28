@@ -1,9 +1,8 @@
 Write the correct version in the "release_version" parameter of the script first
 
-cxfreeze -c -O testsignalmaker.pyw --target-dir dist --packages "scipy" --base-name Win32GUI --icon .\tsm_data\tsm.ico
+cxfreeze -c -O testsignalmaker.pyw --target-dir dist --packages "scipy" --base-name Win32GUI --icon .\data\tsm.ico
 
 copy "C:\Users\--user--\AppData\Local\Programs\Python\Python39\Lib\site-packages\_soundfile_data" into dist/lib
 copy License
 copy data
-copy release notes
 copy extra
