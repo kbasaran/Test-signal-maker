@@ -1,0 +1,3 @@
+a countdown timer for power testing?
+handling exceptions from player and other threads - set a consistent strategy
+write a logfile during play with loop - helps to see test duratoins and in case of power interruption
