@@ -100,7 +100,7 @@ class TestSignal():
 
         self.make_time_array(**kwargs)
 
-        self.raw_import_analysis = (f"{self.import_file_name}"
+        self.raw_import_analysis = (f"File name: {self.import_file_name}"
                                     + f"\nOriginal channel count: {self.imported_channel_count}"
                                     + f"\nImported channel: {self.imported_channel}"
                                     + f"\nOriginal sample rate: {self.imported_FS}"
