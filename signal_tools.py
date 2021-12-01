@@ -142,7 +142,7 @@ class TestSignal():
         self.analysis = (f"Signal type: {self.sig_type}")
 
         if self.sig_type == "Imported":
-            self.analysis += (" - " + self.raw_import_analysis)
+            self.analysis += ("\n" + self.raw_import_analysis)
 
         self.analysis += (f"\nCrest Factor: {self.CF:.4g}x, {self.CFdB:.2f}dB"
                           + f"\nRMS: {self.RMS:.5g}"
