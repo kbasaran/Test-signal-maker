@@ -214,10 +214,16 @@ class Generator(qtc.QObject):
             logging.error("Import failed" + str(e))
             self.exception.emit(e)
 
+    @qtc.Slot()
+    def clear_imported_file(self):
+        self.imported_signal = None
+
     @qtc.Slot(str, dict)
     def process_imported_file(self, sig_type, kwargs):
         self.busy.emit("Generating from import...")
         try:
+            if not hasattr(self, "imported_signal") or not self.imported_signal:
+                raise KeyError("No file imported to process.")
             generated_signal = copy.deepcopy(self.imported_signal)
             generated_signal.reuse_existing(**kwargs)
             self.signal_ready.emit(generated_signal)
@@ -1524,17 +1530,16 @@ class MainWindow(qtw.QMainWindow):
                 # logging.info([[file_path, type(file_path)], [file_folder, type(file_folder)]])
                 if file_path:
                     self.sys_params["file_folder"] = os.path.dirname(file_path)
+                    update_sys_params_dict(self.sys_params)
                     self.generator.import_file(file_path)
                 else:
-                    self.sys_params["file_folder"] = ""
                     q_signals.gen_signal_not_ready.emit("No file chosen.")
-                    signal_type_selector.setCurrentIndex(-1)
+                    self.generator.clear_imported_file()
 
             except Exception as e:
                 error_text = "File import failed."
                 PopupError(error_text, str(e))
-
-            finally:
+                self.sys_params["file_folder"] = ""
                 update_sys_params_dict(self.sys_params)
 
         def generate_sweep(dial_value):
@@ -1702,7 +1707,7 @@ class MainWindow(qtw.QMainWindow):
             mpl_widget.clear_plot()
             self.player.stop_play()
             generated_signal_info_widget.setText(generator_info_text)
-            generated_signal_info_widget.repaint()
+            generated_signal_info_widget.repaint()  # why?
             self.generated_signal = None
 
         q_signals.gen_signal_not_ready.connect(gen_signal_not_ready)
@@ -1754,11 +1759,11 @@ class MainWindow(qtw.QMainWindow):
         @qtc.Slot(str)
         def gen_parameters_changed(new_param):
             "When generator parameters changed"
-            if not signal_type_selector.currentText() == "Imported" and signal_type_selector.currentIndex() >= 0:
+            if not (signal_type_selector.currentText() == "Imported" and not self.generated_signal):
                 generator_info_text = f'Parameter changed: {new_param}' + \
                     '\nPress "Generate" to generate signal.'
                 q_signals.gen_signal_not_ready.emit(generator_info_text)
-        q_signals.gen_parameters_changed.connect(gen_parameters_changed)  # one is signal one is function
+        q_signals.gen_parameters_changed.connect(gen_parameters_changed)
 
         @qtc.Slot()
         def play_parameters_changed_actions():
