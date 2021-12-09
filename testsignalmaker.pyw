@@ -21,7 +21,12 @@ from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as Navigatio
 from signal_tools import TestSignal, make_fade_window_n
 
 import logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(filename='tsm.log',
+                    encoding='utf-8',
+                    level=logging.INFO,
+                    format='%(asctime)s %(levelname)s - %(funcName)s: %(message)s',
+                    datefmt='%Y-%m-%d %H:%M:%S',
+                    )
 
 release_version = "0.1.3+"
 
@@ -294,6 +299,7 @@ class Player(qtc.QObject):
     signal_exception = qtc.Signal(str)
     publish_log = qtc.Signal(dict)
     impossible_voltage_request = qtc.Signal(str)
+    log_this = qtc.Signal(str)
 
     # which methods should have exception handling in them?
 
@@ -442,6 +448,7 @@ class Player(qtc.QObject):
                                           **stream_settings,
                                           )
             self.fade_window_size = int(self.stream.samplerate // 10)
+            self.ugs_play_elapsed_time = -1.
 
     def _bring_wave_states_to_zero(self):
         self._omega_last = 0.
@@ -597,6 +604,13 @@ class Player(qtc.QObject):
             if self.do_logging:
                 logging.info(f"User generated signal play levels: {ugs_play_rms_levels}")
 
+            if self.ugs_play_elapsed_time == -1.:
+                self.log_this.emit(f"Started with RMS voltages: {self._ugs_play_voltages}")
+            self.ugs_play_elapsed_time += self.stream.latency
+            if self.ugs_play_elapsed_time > 60 * 60 * 6:  # 5 is a correction factor
+                self.log_this.emit(f"Ongoing with RMS voltages: {self._ugs_play_voltages}")
+                self.ugs_play_elapsed_time = 0.
+            # self.log_this.emit(str(self.stream.latency))
             return mono_signal_chunk, initial_rms, ugs_play_rms_levels, do_callback_stop
 
         except Exception as e:
@@ -727,8 +741,8 @@ class Player(qtc.QObject):
             t1_start = pyt_time.perf_counter_ns()
 
         if status.output_underflow:
-            self.signal_exception.emit("Buffer underflow. Consider increasing latency settings.")
-            raise sd.CallbackAbort
+            self.log_this.emit("Buffer underflow. Consider increasing latency settings.")
+            # raise sd.CallbackAbort
         # Maybe switch to high latency if this occurs
 
         if status and not status.priming_output:
@@ -974,6 +988,17 @@ class FileWriter(qtc.QThread):
             raise e
 
 
+class PlayerLogger(qtc.QThread):
+
+    def __init__(self):
+        super().__init__()
+        # self.setPriority(qtc.QThread.LowestPriority)
+
+    @qtc.Slot()
+    def log(self, message):
+        logging.info(message)
+
+
 class MainWindow(qtw.QMainWindow):
 
     def __init__(self, app):  # is this app thing really necessary?
@@ -986,6 +1011,7 @@ class MainWindow(qtw.QMainWindow):
             gen_parameters_changed = qtc.Signal(str)
             play_parameters_changed = qtc.Signal()
             sys_parameters_changed = qtc.Signal(dict)
+            # player_log_message = qtc.Signal(str)
 
         q_signals = Communicate()
 
@@ -1402,6 +1428,9 @@ class MainWindow(qtw.QMainWindow):
         self.generator.moveToThread(self.generator_thread)
         self.generator_thread.start(qtc.QThread.LowPriority)
 
+        self.player_logger = PlayerLogger()
+        self.player_logger.start(qtc.QThread.LowestPriority)
+
         self.player_thread = qtc.QThread()
         self.player = Player(self.sys_params)
         self.player.moveToThread(self.player_thread)
@@ -1410,6 +1439,7 @@ class MainWindow(qtw.QMainWindow):
         qtw.QApplication.instance().aboutToQuit.connect(self.generator_thread.quit)
         qtw.QApplication.instance().aboutToQuit.connect(self.player.stop_play)
         qtw.QApplication.instance().aboutToQuit.connect(self.player_thread.quit)
+        qtw.QApplication.instance().aboutToQuit.connect(self.player_logger.quit)
 
         # %% Functions triggered by user through the GUI
         def gain_and_levels_button_clicked():
@@ -1660,6 +1690,12 @@ class MainWindow(qtw.QMainWindow):
                 sweep_status.setText("Unknown state")
         self.player.sweep_generated.connect(update_sweep_info_screen, qtc.Qt.QueuedConnection)
         self.player.sweep_generator_stopped.connect(lambda: update_sweep_info_screen(0, 0))
+
+        # Log something through the thread
+        @qtc.Slot(str)
+        def log_with_thread(message):
+            self.player_logger.log(f"Player: {message}")
+        self.player.log_this.connect(log_with_thread)
 
         # Logging functionality
         def show_log(log_dict):
