@@ -602,13 +602,13 @@ class Player(qtc.QObject):
             for channel in range(1, self.stream.channels + 1):
                 ugs_play_rms_levels[channel - 1] = self._ugs_play_signal_rms[channel]
             if self.do_logging:
-                logging.info(f"User generated signal play levels: {ugs_play_rms_levels}")
+                logging.info(f"User generated signal play levels: {ugs_play_rms_levels:.4f}")
 
             if self.ugs_play_elapsed_time == -1.:
-                self.log_this.emit(f"Started with RMS voltages: {self._ugs_play_voltages}")
+                self.log_this.emit(f"Started with RMS voltages: {self._ugs_play_voltages:.2f}")
             self.ugs_play_elapsed_time += self.stream.latency
-            if self.ugs_play_elapsed_time > 60 * 60 * 6:  # 5 is a correction factor
-                self.log_this.emit(f"Ongoing with RMS voltages: {self._ugs_play_voltages}")
+            if self.ugs_play_elapsed_time > 60 * 60 * 6:  # 6 is a correction factor. latency value from sound card is incorrect
+                self.log_this.emit(f"Ongoing with RMS voltages: {self._ugs_play_voltages:.2f}")
                 self.ugs_play_elapsed_time = 0.
             # self.log_this.emit(str(self.stream.latency))
             return mono_signal_chunk, initial_rms, ugs_play_rms_levels, do_callback_stop
