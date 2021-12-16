@@ -21,7 +21,9 @@ from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as Navigatio
 from signal_tools import TestSignal, make_fade_window_n
 
 import logging
-logging.basicConfig(filename='tsm.log',
+
+home_folder = os.path.expanduser("~")
+logging.basicConfig(filename=os.path.join(home_folder, 'tsm.log'),
                     encoding='utf-8',
                     level=logging.INFO,
                     format='%(asctime)s %(levelname)s - %(funcName)s: %(message)s',
@@ -989,7 +991,6 @@ class FileWriter(qtc.QThread):
 
 
 class PlayerLogger(qtc.QThread):
-
     def __init__(self):
         super().__init__()
         # self.setPriority(qtc.QThread.LowestPriority)
