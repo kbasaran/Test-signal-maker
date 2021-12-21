@@ -23,9 +23,9 @@ from signal_tools import TestSignal, make_fade_window_n
 import logging
 
 home_folder = os.path.expanduser("~")
-logging.basicConfig(filename=os.path.join(home_folder, 'tsm.log'),
+logging.basicConfig(level=logging.INFO,
+                    filename=os.path.join(home_folder, 'tsm.log'),
                     encoding='utf-8',
-                    level=logging.INFO,
                     format='%(asctime)s %(levelname)s - %(funcName)s: %(message)s',
                     datefmt='%Y-%m-%d %H:%M:%S',
                     )
@@ -314,18 +314,14 @@ class Player(qtc.QObject):
         # pre-assign state variables for sweep generator
         self._theta_last = np.nan
         self._omega_last = np.nan
-        self._sweep_level_last = {1: 0., 2: 0.}
         self.play_pos = None
-        self.fade_in_remaining_frames = 0
-        self.fade_out_remaining_frames = 0
         self.is_play_in_loop = False
-        self._bring_wave_states_to_zero()
         self.reset_fade_out()
         self.output_log = {"time_sig": [],
                            "fade_out_window": np.array([]),
                            "fade_in_window": [],
                            }
-        self.log_output_signal = False
+        self.log_output_signal = False  # only logs channel 1 currently
 
         # receive sys params
         self.set_sys_params(sys_params)
@@ -344,9 +340,8 @@ class Player(qtc.QObject):
         self.play_stopped.emit("Stopped.")
         self._theta_last = np.nan
         self._omega_last = np.nan
-        self._bring_wave_states_to_zero()
+        self._bring_wave_states_to_zero(self.stream.channels)
         self.sweep_generated.emit(np.nan, np.nan)
-        # self.set_ugs_play_levels({})
         self.fade_out_frames = {"remaining": np.nan, "total": np.nan}
         if self.log_output_signal:
             self.publish_log.emit(self.output_log)
@@ -444,6 +439,7 @@ class Player(qtc.QObject):
                 self.stream.close()
 
             self.set_sys_params(sys_params)
+            self._bring_wave_states_to_zero(stream_settings["channels"])
 
             self.stream = sd.OutputStream(callback=self.callback,
                                           finished_callback=self.announce_callback_is_finished,
@@ -452,9 +448,11 @@ class Player(qtc.QObject):
             self.fade_window_size = int(self.stream.samplerate // 10)
             self.ugs_play_elapsed_time = -1.
 
-    def _bring_wave_states_to_zero(self):
+    def _bring_wave_states_to_zero(self, channel_count):
         self._omega_last = 0.
         self._theta_last = 0.
+        self._sweep_level_last = {channel: 0. for channel in range(1, channel_count + 1)}
+
 
     @qtc.Slot()
     def is_active(self):
@@ -667,9 +665,10 @@ class Player(qtc.QObject):
 
             # There was a omega=0 case. Reset the theta and omega values.
             if target_omega == 0:
-                self._bring_wave_states_to_zero()
+                self._bring_wave_states_to_zero(self.stream.channels)
 
             # set the signals to rms = 1 and also do the smooth crossing between voltages
+            logging.debug(f"self._sweep_level_last, self._sweep_signal_rms: {self._sweep_level_last}, {self._sweep_signal_rms}")
             mono_signal_chunk = mono_signal_chunk  / np.exp2(-0.5)\
                 * make_fade_window_n(self._sweep_level_last[self._sweep_channel],
                                      self._sweep_signal_rms[self._sweep_channel],
@@ -710,6 +709,7 @@ class Player(qtc.QObject):
             # Make a table with correct rms signal levels
             initial_rms = 1  # rms was made 1 above
             target_rms_levels = np.zeros(self.stream.channels)
+            logging.debug(f"_sweep_channel, _sweep_signal_rms: {self._sweep_channel}, {self._sweep_signal_rms}")
             target_rms_levels[self._sweep_channel - 1] = 1
             logging.debug(f"Sweep levels: {target_rms_levels}")
 
@@ -741,7 +741,7 @@ class Player(qtc.QObject):
             self.log_through_thread.emit("Buffer underflow. Consider increasing latency settings.")
             # raise sd.CallbackAbort
             # Maybe switch to high latency if this occurs
-        elif not status.priming_output:
+        elif status and not status.priming_output:
             error_message = f"Unexpected callback status: {status}"
             logging.warning(error_message)
 
@@ -749,7 +749,7 @@ class Player(qtc.QObject):
         if (self.play_pos is None) and (np.isnan(self.user_req_alpha) and np.isnan(self.user_req_omega)):
             mono_signal_chunk = np.zeros(frames)          
             logging.debug("Nothing to play for the callback. Put in zeros.")
-            
+
         elif self.play_pos is not None:
             mono_signal_chunk, initial_rms, target_rms_levels, do_callback_stop = self.callback_for_ugs(frames)
 
