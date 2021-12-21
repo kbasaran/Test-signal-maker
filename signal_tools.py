@@ -55,6 +55,7 @@ class TestSignal():
             self.normalize(**kwargs)
         if "fadeinout" in kwargs.keys() and kwargs["fadeinout"]:
             self.apply_fade_in_out()
+        self.time_sig = self.time_sig.astype(np.float32)  # reduce size in memory at the end
         self.analyze(**kwargs)  # analyze the time signal
 
     def generate_pink_noise(self, **kwargs):
@@ -101,9 +102,9 @@ class TestSignal():
         self.make_time_array(**kwargs)
 
         self.raw_import_analysis = (f"File name: {self.import_file_name}"
-                                    + f"\nOriginal channel count: {self.imported_channel_count}"
-                                    + f"\nImported channel: {self.imported_channel}"
-                                    + f"\nOriginal sample rate: {self.imported_FS}"
+                                    f"\nOriginal channel count: {self.imported_channel_count}"
+                                    f"\nImported channel: {self.imported_channel}"
+                                    f"\nOriginal sample rate: {self.imported_FS}"
                                     )
 
     def reduce_channels(self, channel_to_use="downmix-all"):
@@ -145,13 +146,14 @@ class TestSignal():
             self.analysis += ("\n" + self.raw_import_analysis)
 
         self.analysis += (f"\nCrest Factor: {self.CF:.4g}x, {self.CFdB:.2f}dB"
-                          + f"\nRMS: {self.RMS:.5g}"
-                          + f"\nPositive peak: {self.pos_peak:.5g}"
-                          + f"\nNegative peak: {self.neg_peak:.5g}"
-                          + f"\nMean: {self.mean:.5g}"
-                          + f"\nSample rate: {self.FS} Hz"
-                          + f"\nDuration: {self.T:.2f} seconds"
-                          + f"\nCurrent channel count: {self.channel_count()}"
+                          f"\nRMS: {self.RMS:.5g}"
+                          f"\nPositive peak: {self.pos_peak:.5g}"
+                          f"\nNegative peak: {self.neg_peak:.5g}"
+                          f"\nMean: {self.mean:.5g}"
+                          f"\nSample rate: {self.FS} Hz"
+                          # f"\nData type: {self.time_sig.dtype}"
+                          f"\nDuration: {self.T:.2f} seconds"
+                          f"\nCurrent channel count: {self.channel_count()}"
                           )
 
         if self.applied_fade_in_duration:

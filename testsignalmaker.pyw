@@ -303,6 +303,7 @@ class Player(qtc.QObject):
     impossible_voltage_request = qtc.Signal(str)
     log_through_thread = qtc.Signal(str)
 
+    DEFAULT_NP_DTYPE = np.float32
     # which methods should have exception handling in them?
 
     def __init__(self, sys_params):
@@ -318,7 +319,7 @@ class Player(qtc.QObject):
         self.is_play_in_loop = False
         self.reset_fade_out()
         self.output_log = {"time_sig": [],
-                           "fade_out_window": np.array([]),
+                           "fade_out_window": np.array([], dtype=self.DEFAULT_NP_DTYPE),
                            "fade_in_window": [],
                            }
         self.log_output_signal = False  # only logs channel 1 currently
@@ -464,7 +465,7 @@ class Player(qtc.QObject):
         Returns a tuple with,
         one channel array of theta, last value of theta, last value of omega
         """
-        mono_signal_chunk = np.zeros(len(t_array))
+        mono_signal_chunk = np.zeros(len(t_array), dtype=self.DEFAULT_NP_DTYPE)
         theta_last = 0
         omega_last = 0
         return mono_signal_chunk, theta_last, omega_last
@@ -512,7 +513,7 @@ class Player(qtc.QObject):
         try:
             # Try to fill the soundcard buffer within this loop
             empty_frames = int(frames)
-            mono_signal_chunk = np.empty(frames)
+            mono_signal_chunk = np.empty(frames, dtype=self.DEFAULT_NP_DTYPE)
 
             while empty_frames > 0:
                 logging.debug(f"---Fill cycle---")
@@ -525,7 +526,7 @@ class Player(qtc.QObject):
                     part_mono_signal_chunk = self.user_gen_signal.time_sig[self.play_pos:self.play_pos + number_of_samples_to_write]
                 else:  # fill it all with empty
                     number_of_samples_to_write = empty_frames
-                    part_mono_signal_chunk = np.zeros(empty_frames)
+                    part_mono_signal_chunk = np.zeros(empty_frames, dtype=self.DEFAULT_NP_DTYPE)
 
                 # trigger fade_out because end of the signal is coming
                 if (remaining_in_user_signal <= self.fade_window_size) and np.isnan(self.fade_out_frames["remaining"]):
@@ -560,7 +561,7 @@ class Player(qtc.QObject):
 
                 else:
                     if self.log_output_signal:
-                        self.output_log["fade_out_window"] = np.concatenate([self.output_log["fade_out_window"], np.ones(number_of_samples_to_write) * np.nan])
+                        self.output_log["fade_out_window"] = np.concatenate([self.output_log["fade_out_window"], np.ones(number_of_samples_to_write, dtype=self.DEFAULT_NP_DTYPE) * np.nan])
 
                 # note: the player tab is not disabled during playing a signal
 
@@ -577,7 +578,7 @@ class Player(qtc.QObject):
                     part_mono_signal_chunk = part_mono_signal_chunk * fade_in_window
 
                 if self.log_output_signal:
-                    window_to_write = list(fade_in_window if self.play_pos < self.fade_window_size else np.ones(number_of_samples_to_write) * np.nan)
+                    window_to_write = list(fade_in_window if self.play_pos < self.fade_window_size else np.ones(number_of_samples_to_write, dtype=self.DEFAULT_NP_DTYPE) * np.nan)
                     self.output_log["fade_in_window"].extend(window_to_write)
 
                 # add the data from this while loop to the temporary signal block
@@ -625,7 +626,7 @@ class Player(qtc.QObject):
 
             # Our time array for this callback.
             # 0 represents latest value therefore starting from 1
-            t_array = np.arange(1, frames + 1) / self.stream.samplerate
+            t_array = np.arange(1, frames + 1, dtype=self.DEFAULT_NP_DTYPE) / self.stream.samplerate
 
             # if user requests acceleration and not a target omega
             # this will translate alpha and change target_omega from nan to a value
@@ -651,7 +652,7 @@ class Player(qtc.QObject):
             elif target_omega == 0 and self._omega_last == 0:
                 logging.debug("Callback case zero output")
                 # Otherwise it clicks.
-                mono_signal_chunk = np.zeros(frames)
+                mono_signal_chunk = np.zeros(frames, dtype=self.DEFAULT_NP_DTYPE)
 
             # Linear sweep is necessary
             else:
@@ -673,7 +674,7 @@ class Player(qtc.QObject):
                 * make_fade_window_n(self._sweep_level_last[self._sweep_channel],
                                      self._sweep_signal_rms[self._sweep_channel],
                                      frames,
-                                     )
+                                     ).astype(self.DEFAULT_NP_DTYPE)
             self._sweep_level_last[self._sweep_channel] = self._sweep_signal_rms[self._sweep_channel]
 
             # If this was the last fade-out callback and calling back needs to stop
@@ -689,7 +690,7 @@ class Player(qtc.QObject):
                                                      0,
                                                      frames,
                                                      fade_start_end_idx,
-                                                     )
+                                                     ).astype(self.DEFAULT_NP_DTYPE)
                 mono_signal_chunk = mono_signal_chunk * fade_out_window
 
                 logging.debug(f"Remaining/prepared fade out frames: {self.fade_out_frames['remaining']}/{len(fade_out_window)}")
@@ -700,7 +701,7 @@ class Player(qtc.QObject):
 
             else:
                 if self.log_output_signal:
-                    self.output_log["fade_out_window"] = np.concatenate([self.output_log["fade_out_window"], np.ones(frames) * np.nan])
+                    self.output_log["fade_out_window"] = np.concatenate([self.output_log["fade_out_window"], np.ones(frames, dtype=self.DEFAULT_NP_DTYPE) * np.nan])
 
             # Reset the fade-out counters
             if (self.fade_out_frames["remaining"] <= 0):
@@ -708,7 +709,7 @@ class Player(qtc.QObject):
 
             # Make a table with correct rms signal levels
             initial_rms = 1  # rms was made 1 above
-            target_rms_levels = np.zeros(self.stream.channels)
+            target_rms_levels = np.zeros(self.stream.channels, dtype=self.DEFAULT_NP_DTYPE)
             logging.debug(f"_sweep_channel, _sweep_signal_rms: {self._sweep_channel}, {self._sweep_signal_rms}")
             target_rms_levels[self._sweep_channel - 1] = 1
             logging.debug(f"Sweep levels: {target_rms_levels}")
@@ -760,7 +761,7 @@ class Player(qtc.QObject):
         indata[:frames, :self.stream.channels] = mono_signal_chunk\
             .repeat(self.stream.channels, axis=0)\
             .reshape(frames, self.stream.channels)\
-            / initial_rms * np.array(target_rms_levels)  # scale for correct voltage
+            / initial_rms * np.array(target_rms_levels, dtype=self.DEFAULT_NP_DTYPE)  # scale for correct voltage
 
         # log the output signal
         if self.log_output_signal:
@@ -954,7 +955,7 @@ class FileWriter(qtc.QThread):
                 sf_kwargs["subtype"] = "PCM_24"
 
             # Apply gain to each channel
-            time_sig_with_gain = np.empty((self.generated_signal.time_sig.shape[0], channels))
+            time_sig_with_gain = np.empty((self.generated_signal.time_sig.shape[0], channels), dtype=self.DEFAULT_NP_DTYPE)
             for i in range(channels):
                 time_sig_with_gain[:, i] = self.generated_signal.time_sig * self.kwargs["file_rms"]
 
@@ -1823,12 +1824,12 @@ class MatplotlibWidget(qtw.QWidget):
         fig.tight_layout()
 
     def calculate_3rd_octave_bands(self, time_sig: np.array, FS) -> tuple:
-        sig = time_sig.astype("float32")
+        sig = time_sig.astype(np.float32)
         threeoct_freqs = ac.standards.iec_61260_1_2014.NOMINAL_THIRD_OCTAVE_CENTER_FREQUENCIES
 
         if len(time_sig) <= 2**21:
             return (threeoct_freqs,
-                    ac.signal.third_octaves(sig, FS, frequencies=threeoct_freqs)[1]-94,
+                    ac.signal.third_octaves(sig, FS, frequencies=threeoct_freqs)[1] - 20 * np.log10(1 / (20e-6)),
                     )
         else:
             n_arrays = len(time_sig) // 2**20
@@ -1839,7 +1840,7 @@ class MatplotlibWidget(qtw.QWidget):
             for i, array in enumerate(arrays):
                 third_oct_pows[i, :] = 10**(ac.signal.third_octaves(array, FS,
                                                                     frequencies=threeoct_freqs)[1] / 10)
-            third_oct_pow_averages = (10 * np.log10(np.average(third_oct_pows, axis=0))) - 94
+            third_oct_pow_averages = (10 * np.log10(np.average(third_oct_pows, axis=0))) - 20 * np.log10(1 / (20e-6))
             return (threeoct_freqs, third_oct_pow_averages)
 
     @qtc.Slot(TestSignal)
