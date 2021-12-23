@@ -30,7 +30,7 @@ logging.basicConfig(level=logging.INFO,
                     datefmt='%Y-%m-%d %H:%M:%S',
                     )
 
-release_version = "0.1.3+"
+release_version = "0.1.4"
 
 
 class FileImportDialog(qtw.QDialog):
@@ -349,6 +349,7 @@ class Player(qtc.QObject):
                                "fade_out_window": [],
                                "fade_in_window": [],
                                }
+        logging.info("Audio stream stopped.")
         return None
 
     @qtc.Slot()
@@ -603,10 +604,10 @@ class Player(qtc.QObject):
                 logging.debug(f"User generated signal play levels: {ugs_play_rms_levels:.4f}")
 
             if self.ugs_play_elapsed_time == -1.:
-                self.log_through_thread.emit(f"Started with RMS voltages: {self._ugs_play_voltages}")
+                self.log_through_thread.emit(f"Started with: {self._ugs_play_voltages}Vrms")
             self.ugs_play_elapsed_time += self.stream.latency
             if self.ugs_play_elapsed_time > 60 * 60 * 6:  # 6 is a correction factor. latency value from sound card is incorrect
-                self.log_through_thread.emit(f"Ongoing with RMS voltages: {self._ugs_play_voltages}")
+                self.log_through_thread.emit(f"Ongoing with: {self._ugs_play_voltages}Vrms")
                 self.ugs_play_elapsed_time = 0.
             return mono_signal_chunk, initial_rms, ugs_play_rms_levels, do_callback_stop
 
@@ -808,6 +809,7 @@ class Player(qtc.QObject):
                                    "latency": sys_params["sweep_latency"],
                                    }
                 self._initiate_stream(sys_params, stream_settings)
+                logging.info("Sweep stream started.")
                 self.stream.start()
 
         except Exception as e:
@@ -1512,7 +1514,7 @@ class MainWindow(qtw.QMainWindow):
                 writer.file_write_successful.connect(write_file_info_widget.setText)
                 writer.file_write_busy.connect(write_file_info_widget.setText)
                 writer.file_write_fail.connect(write_file_info_widget.setText)
-                writer.finished.connect(lambda: logging.info("Finished thread file writer"))
+                writer.finished.connect(lambda: logging.debug("Finished thread file writer"))
                 writer.start()
             except Exception as e:
                 error_text = "File writer failed."
@@ -1799,6 +1801,7 @@ class MainWindow(qtw.QMainWindow):
             "System parameters changed"
             self.player.stop_play()
             self.player.set_sys_params(sys_params)
+            logging.warning("System parameters changed by user.")
             sweep_channel.setMaximum(int(sys_params["channel_count"]))
             # setting the maximum value for the sweep voltage spin box here would be nice
             # but it depends on channel so not so simple to do
