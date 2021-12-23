@@ -13,10 +13,11 @@ logging.basicConfig(filename='speaker_test.log', encoding='utf-8', level=logging
 # User only changes these two rows:
 # arguments are: year, month, day, hour, minute, 0, 0, 0, is_it_summertime
 start_time = time.mktime((2021, 5, 21, 17, 0, 0, 0, 0, 1)) / 60**2  # hours
-lost_time = 24 * 1.5  # hours
+lost_time = 0  # hours
+test_name = "My test........"
 
 logging.info("\n\nStart logging")
-logging.info("VSG3.5 test at 125°C")
+logging.info(test_name)
 logging.info(f"Test started at: {time.localtime(start_time*60**2)}")
 logging.info(f"Lost time: {lost_time} hours")
 
@@ -28,7 +29,7 @@ while True:
         register = f"\nLog time: {time_stamp}.\nTime tested: {int(time_passed):d} hours"
         print(register)
         logging.info(register)
-        time.sleep(3)
+        time.sleep(60)
     except KeyboardInterrupt:
         print("Keyboard interrupt. Quitting...")
         logging.shutdown()
