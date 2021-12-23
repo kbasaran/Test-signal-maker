@@ -6,3 +6,4 @@ copy "C:\Users\--user--\AppData\Local\Programs\Python\Python39\Lib\site-packages
 copy License
 copy data
 copy extra
+add src folder
