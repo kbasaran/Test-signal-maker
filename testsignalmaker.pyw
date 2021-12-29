@@ -25,7 +25,7 @@ import logging
 home_folder = os.path.expanduser("~")
 logging.basicConfig(level=logging.INFO,
                     filename=os.path.join(home_folder, 'tsm.log'),
-                    encoding='utf-8',
+#                    encoding='utf-8',
                     format='%(asctime)s %(levelname)s - %(funcName)s: %(message)s',
                     datefmt='%Y-%m-%d %H:%M:%S',
                     )
