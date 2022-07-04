@@ -97,24 +97,30 @@ class TestSignal():
 
         if "import_channel" in kwargs.keys():
             self.reduce_channels(kwargs["import_channel"])
+        else:
+            self.reduce_channels("downmix_all")
 
         self.make_time_array(**kwargs)
 
         self.raw_import_analysis = (f"File name: {self.import_file_name}"
                                     + f"\nOriginal channel count: {self.imported_channel_count}"
-                                    + f"\nImported channel: {self.imported_channel}"
+                                    + f"\nImported channel: {str(self.imported_channel + 1) if isinstance(self.imported_channel, int) else self.imported_channel}"
+                                    # integer count for user, starting from 1
                                     + f"\nOriginal sample rate: {self.imported_FS}"
                                     )
 
-    def reduce_channels(self, channel_to_use="downmix-all"):
-        if channel_to_use == "downmix_all":
+    def reduce_channels(self, channel_to_use):
+        # Channel to use can be an integer starting from 1 or "downmix_all"
+        if channel_to_use == 0:
+            raise ValueError("Channel numbers start from 1. Channel: 0 is invalid.")
+        elif channel_to_use == "downmix_all":
             if self.channel_count() == 1:
                 self.time_sig = self.time_sig[:, 0]
-                self.imported_channel = "1"
+                self.imported_channel = 0
                 return
             elif self.channel_count() > 1:
                 self.time_sig = np.mean(self.time_sig, axis=1)
-                self.imported_channel = "Downmix all"
+                self.imported_channel = "downmix_all"
             else:
                 raise KeyError(f"Unable to downmix. Channel count {self.channel_count()} is invalid.")
 
@@ -123,7 +129,7 @@ class TestSignal():
                 raise KeyError(f"Channel {channel_to_use} does not exist in the original signal.")
             else:
                 self.time_sig = self.time_sig[:, channel_to_use - 1]
-                self.imported_channel = str(channel_to_use)
+                self.imported_channel = int(channel_to_use) - 1
 
         else:
             raise TypeError(f"Invalid request for channel_to_use: {[channel_to_use, type(channel_to_use)]}")
