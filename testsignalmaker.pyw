@@ -145,7 +145,6 @@ class SysGainAndLevelsPopup(qtw.QDialog):
         stream_latency.addItem("Very safe - 100ms", 0.1)
 
         current_val = current_sys_params["stream_latency"]
-        print(current_val, type(current_val))
         current_val_idx = stream_latency.findData(current_val)
 
         if current_val_idx == -1:
