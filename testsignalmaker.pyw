@@ -92,7 +92,7 @@ class SysGainAndLevelsPopup(qtw.QDialog):
     def __init__(self, current_sys_params):
         super().__init__()
         self.setWindowTitle("System parameters")
-        self.setMinimumWidth(300)
+        self.setMinimumWidth(400)
         self.setMinimumHeight(200)
 
         # Form for gains
@@ -139,10 +139,10 @@ class SysGainAndLevelsPopup(qtw.QDialog):
 
         # Stream latency
         stream_latency = qtw.QComboBox()
-        stream_latency.addItem("High", "high")
-        stream_latency.addItem("Low", "low")
-        stream_latency.addItem("Safe - 50ms", 0.05)
-        stream_latency.addItem("Very safe - 100ms", 0.1)
+        stream_latency.addItem("Sound device default: High", "high")
+        stream_latency.addItem("Sound device default: Low", "low")
+        stream_latency.addItem("User value: Safe - 50ms", 0.05)
+        stream_latency.addItem("User value: Very safe - 100ms", 0.1)
 
         current_val = current_sys_params["stream_latency"]
         current_val_idx = stream_latency.findData(current_val)
