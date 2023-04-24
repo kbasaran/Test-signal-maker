@@ -30,7 +30,7 @@ logging.basicConfig(level=logging.INFO,
                     datefmt='%Y-%m-%d %H:%M:%S',
                     )
 
-release_version = "0.1.4"
+release_version = "0.1.4+"
 
 
 class FileImportDialog(qtw.QDialog):
@@ -92,7 +92,7 @@ class SysGainAndLevelsPopup(qtw.QDialog):
     def __init__(self, current_sys_params):
         super().__init__()
         self.setWindowTitle("System parameters")
-        self.setMinimumWidth(300)
+        self.setMinimumWidth(400)
         self.setMinimumHeight(200)
 
         # Form for gains
@@ -137,18 +137,20 @@ class SysGainAndLevelsPopup(qtw.QDialog):
         else:
             sweep_sample_rate.setCurrentIndex(current_val_idx)
 
-        # Sweep latency
-        sweep_latency = qtw.QComboBox()
-        sweep_latency.addItem("High", "high")
-        sweep_latency.addItem("Low", "low")
+        # Stream latency
+        stream_latency = qtw.QComboBox()
+        stream_latency.addItem("Sound device default: High", "high")
+        stream_latency.addItem("Sound device default: Low", "low")
+        stream_latency.addItem("User value: Safe - 50ms", 0.05)
+        stream_latency.addItem("User value: Very safe - 100ms", 0.1)
 
-        current_val = current_sys_params["sweep_latency"]
-        current_val_idx = sweep_latency.findData(current_val)
+        current_val = current_sys_params["stream_latency"]
+        current_val_idx = stream_latency.findData(current_val)
 
         if current_val_idx == -1:
-            sweep_latency.setCurrentIndex(0)
+            stream_latency.setCurrentIndex(0)
         else:
-            sweep_latency.setCurrentIndex(current_val_idx)
+            stream_latency.setCurrentIndex(current_val_idx)
 
         # Rest of the layouts
         sys_gain_form_layout.addWidget(qtw.QFrame(FrameShape=qtw.QFrame.HLine, FrameShadow=qtw.QFrame.Sunken))
@@ -156,7 +158,7 @@ class SysGainAndLevelsPopup(qtw.QDialog):
 
         sys_gain_form_layout.addWidget(qtw.QFrame(FrameShape=qtw.QFrame.HLine, FrameShadow=qtw.QFrame.Sunken))
         sys_gain_form_layout.addRow("Sweep sample rate", sweep_sample_rate)
-        sys_gain_form_layout.addRow("Sweep latency mode", sweep_latency)
+        sys_gain_form_layout.addRow("Stream latency", stream_latency)
 
         # Pushbutton
         save_sys_gain_settings = qtw.QPushButton("Save and close")
@@ -185,7 +187,7 @@ class SysGainAndLevelsPopup(qtw.QDialog):
             sys_params["channel_count"] = number_of_channels_widget.value()
             sys_params["max_channel_count"] = current_sys_params["max_channel_count"]  # so this stays fixed, no user option to change it yet
             sys_params["sweep_sample_rate"] = sweep_sample_rate.currentData()
-            sys_params["sweep_latency"] = sweep_latency.currentData()
+            sys_params["stream_latency"] = stream_latency.currentData()
 
             self.user_changed_sys_params_signal.emit(sys_params)
             self.done(0)
@@ -199,6 +201,7 @@ class Generator(qtc.QObject):
     Signal generator object.
 
     """
+    # signals need to be class variables as you see. don't know why. PyQt thing.
     signal_ready = qtc.Signal(TestSignal)
     file_import_success = qtc.Signal(TestSignal)
     busy = qtc.Signal(str)
@@ -369,10 +372,13 @@ class Player(qtc.QObject):
             play_device_info = sd.query_devices(play_device_idx)
             # this doesn't update when default sound device is changed in operating system
             # thus the trick above
-            play_device_summary = f"""Default device: {play_device_info['name']}
+            play_device_summary = f"""Device name: {play_device_info['name']}
 --Max. output channels: {play_device_info['max_output_channels']}
 --Default samplerate: {int(play_device_info['default_samplerate'])}
---Default data type: {sd.default.dtype[1]}"""
+--Default data type: {sd.default.dtype[1]}
+"""
+            if hasattr(self, "stream"):
+                play_device_summary += f"--Reported latency: {self.stream.latency * 1000:.3g}ms"
 
         except Exception as e:
             play_device_summary = f"Exception while detecting sound devices.\n{e}"
@@ -425,7 +431,7 @@ class Player(qtc.QObject):
         new_settings = {}
         running_stream = None if not hasattr(self, "stream") else self.stream
         for setting, value in stream_settings.items():
-            if getattr(running_stream, setting, None) != value:  # if no such key returns None
+            if getattr(running_stream, setting, None) != value:  # this returns None if there is no such key
                 new_settings.update({setting: value})
 
         # Logging
@@ -806,7 +812,7 @@ class Player(qtc.QObject):
             if (not hasattr(self, "stream")) or (not self.stream.active) or self.play_pos:
                 stream_settings = {"samplerate": sys_params["sweep_sample_rate"],
                                    "channels": sys_params["channel_count"],
-                                   "latency": sys_params["sweep_latency"],
+                                   "latency": sys_params["stream_latency"],
                                    }
                 self._initiate_stream(sys_params, stream_settings)
                 logging.info("Sweep stream started.")
@@ -842,9 +848,9 @@ class Player(qtc.QObject):
                 if channel_rms > 0:
                     status_info_text += (
                         f"\n\nChannel {cn}:"
-                        + f"\nAverage output: {channel_rms:.5g} Vrms"
-                        + f"\nPeak output: {channel_rms * self.user_gen_signal.CF:.5g} V"
-                        + f"\nSystem gain: {10**(channel_sys_gain/20):.5g}x, {channel_sys_gain:.4g}dB"
+                        f"\nAverage output: {channel_rms:.5g} Vrms"
+                        f"\nPeak output: {channel_rms * self.user_gen_signal.CF:.5g} V"
+                        f"\nSystem gain: {10**(channel_sys_gain/20):.5g}x, {channel_sys_gain:.4g}dB"
                     )
                 else:
                     status_info_text += (
@@ -1013,7 +1019,7 @@ class MainWindow(qtw.QMainWindow):
             settings = qtc.QSettings('kbasaran', 'Test signal maker')
             settings.clear()
             for key in sys_params.keys():
-                settings.setValue(key, sys_params[key])
+                    settings.setValue(key, sys_params[key])
 
         def update_sys_params_dict(sys_params=None):
             if sys_params:
@@ -1028,7 +1034,12 @@ class MainWindow(qtw.QMainWindow):
                 system_gains_default = {i: 40 for i in range(1, self.sys_params["max_channel_count"] + 1)}
                 self.sys_params["system_gains"] = settings.value("system_gains", system_gains_default)
                 self.sys_params["sweep_sample_rate"] = settings.value("sweep_sample_rate", 44100, type=int)
-                self.sys_params["sweep_latency"] = settings.value("sweep_latency", "high", type=str)
+
+                self.sys_params["stream_latency"] = settings.value("stream_latency", "high", type=str)
+                # change to float if a number
+                if self.sys_params["stream_latency"] not in ("low", "high"):
+                    self.sys_params["stream_latency"] = float(self.sys_params["stream_latency"])
+
                 self.sys_params["file_folder"] = settings.value("file_folder", "", type=str)
 
             write_sys_params_to_registry(self.sys_params)
@@ -1426,9 +1437,9 @@ class MainWindow(qtw.QMainWindow):
         self.player.moveToThread(self.player_thread)
         self.player_thread.start(qtc.QThread.HighPriority)
 
-        qtw.QApplication.instance().aboutToQuit.connect(self.generator_thread.quit)
         qtw.QApplication.instance().aboutToQuit.connect(self.player.stop_play)
         qtw.QApplication.instance().aboutToQuit.connect(self.player_thread.quit)
+        qtw.QApplication.instance().aboutToQuit.connect(self.generator_thread.quit)
         qtw.QApplication.instance().aboutToQuit.connect(self.player_logger.quit)
 
         # %% Functions triggered by user through the GUI
@@ -1445,7 +1456,7 @@ class MainWindow(qtw.QMainWindow):
 
                 stream_settings = {"samplerate": sample_rate_selector.currentData(),
                                    "channels": channel_count,
-                                   "latency": "high",
+                                   "latency": self.sys_params["stream_latency"],
                                    }
 
                 # Params to play signal
