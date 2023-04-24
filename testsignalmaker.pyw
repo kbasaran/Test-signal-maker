@@ -1023,7 +1023,7 @@ class MainWindow(qtw.QMainWindow):
                 self.sys_params = {}
                 settings = qtc.QSettings('kbasaran', 'Test signal maker')
                 self.sys_params["amp_peak"] = settings.value("amp_peak", 99, type=float)
-                self.sys_params["max_channel_count"] = settings.value("max_channel_count", 8, type=int)
+                self.sys_params["max_channel_count"] = settings.value("max_channel_count", 10, type=int)
                 self.sys_params["channel_count"] = settings.value("channel_count", 2, type=int)
                 system_gains_default = {i: 40 for i in range(1, self.sys_params["max_channel_count"] + 1)}
                 self.sys_params["system_gains"] = settings.value("system_gains", system_gains_default)
@@ -1831,7 +1831,7 @@ class MatplotlibWidget(qtw.QWidget):
 
         if len(time_sig) <= 2**21:
             return (threeoct_freqs,
-                    ac.signal.third_octaves(sig, FS, frequencies=threeoct_freqs)[1]-94,
+                    ac.signal.third_octaves(sig, FS, frequencies=threeoct_freqs)[1] + 20 * np.log10(20e-6),
                     )
         else:
             n_arrays = len(time_sig) // 2**20
