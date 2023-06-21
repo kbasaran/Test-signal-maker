@@ -1886,9 +1886,9 @@ class MatplotlibWidget(qtw.QWidget):
 
 # %% If running as main module
 if __name__ == "__main__":
-    qapp = qtw.QApplication.instance()
-    if not qapp:
-        qapp = qtw.QApplication(sys.argv)
+    # qapp = qtw.QApplication.instance()
+    # if not qapp:
+    qapp = qtw.QApplication(sys.argv)
     qapp.setWindowIcon(qtg.QIcon('.\\data\\tsm.png'))
     mw = MainWindow(qapp)
     mw.show()
