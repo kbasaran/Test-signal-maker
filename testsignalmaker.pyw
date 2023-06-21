@@ -3,9 +3,9 @@ import os
 import time as pyt_time
 
 # https://doc.qt.io/qtforpython/
-from PySide2 import QtWidgets as qtw
-from PySide2 import QtCore as qtc
-from PySide2 import QtGui as qtg
+from PySide6 import QtWidgets as qtw
+from PySide6 import QtCore as qtc
+from PySide6 import QtGui as qtg
 
 import sounddevice as sd  # https://python-sounddevice.readthedocs.io
 import numpy as np
@@ -81,7 +81,7 @@ class PopupError():
                 post_action()
 
         msg.buttonClicked.connect(ok_button_pressed)
-        msg.exec_()
+        msg.exec()
 
 
 class SysGainAndLevelsPopup(qtw.QDialog):
@@ -997,19 +997,15 @@ class PlayerLogger(qtc.QThread):
 
 class MainWindow(qtw.QMainWindow):
 
+    gen_signal_not_ready = qtc.Signal(str)
+    gen_parameters_changed = qtc.Signal()
+    play_parameters_changed = qtc.Signal()
+    sys_parameters_changed = qtc.Signal(dict)
+    # player_log_message = qtc.Signal(str)
+    
     def __init__(self, app):  # is this app thing really necessary?
         """MainWindow constructor"""
         super().__init__()
-
-        class Communicate(qtc.QObject):
-            """QObject for signaling among Qt objects"""
-            gen_signal_not_ready = qtc.Signal(str)
-            gen_parameters_changed = qtc.Signal(str)
-            play_parameters_changed = qtc.Signal()
-            sys_parameters_changed = qtc.Signal(dict)
-            # player_log_message = qtc.Signal(str)
-
-        q_signals = Communicate()
 
         # Main UI code goes here
         self.setMinimumWidth(1024)
@@ -1054,7 +1050,7 @@ class MainWindow(qtw.QMainWindow):
                                        "IEC 268",
                                        "Sine wave",
                                        "Imported"])
-        signal_type_selector.activated.connect(q_signals.gen_parameters_changed)
+        signal_type_selector.activated.connect(self.gen_parameters_changed)
 
         frequency_widget = qtw.QDoubleSpinBox(Minimum=1,
                                               Maximum=999999,
@@ -1065,7 +1061,7 @@ class MainWindow(qtw.QMainWindow):
                                               )
         frequency_widget.setEnabled(False)
 
-        frequency_widget.valueChanged.connect(q_signals.gen_parameters_changed)
+        frequency_widget.valueChanged.connect(self.gen_parameters_changed)
 
         compression_widget = qtw.QDoubleSpinBox(Minimum=-5,
                                                 Maximum=5,
@@ -1074,7 +1070,7 @@ class MainWindow(qtw.QMainWindow):
         compression_widget.setToolTip("a > 0 is expansion, a = 0 is no change, a < 0 is compression."
                                       "\nTry different values to reach the crest factor that you aim."
                                       )
-        compression_widget.valueChanged.connect(q_signals.gen_parameters_changed)
+        compression_widget.valueChanged.connect(self.gen_parameters_changed)
 
         duration_widget = qtw.QDoubleSpinBox(Minimum=1,
                                              Maximum=60*10,
@@ -1085,19 +1081,19 @@ class MainWindow(qtw.QMainWindow):
                                                      "\nWarning: Long signals with high sampling rates "
                                                      "will take a long time to generate!"
                                              )
-        duration_widget.valueChanged.connect(q_signals.gen_parameters_changed)
+        duration_widget.valueChanged.connect(self.gen_parameters_changed)
 
         sample_rate_selector = qtw.QComboBox()
         for i in [22050, 44100, 48000, 96000]:
             sample_rate_selector.addItem(str(i), i)
         sample_rate_selector.setCurrentIndex(1)
-        sample_rate_selector.currentTextChanged.connect(q_signals.gen_parameters_changed)
+        sample_rate_selector.currentTextChanged.connect(self.gen_parameters_changed)
 
         # Filters
         self.no_of_filters = 8
 
         class Filter:
-            def __init__(self):
+            def __init__(self, mw):
                 self.widgets = {"type": qtw.QComboBox(),
                                 "frequency": qtw.QSpinBox(Minimum=1,
                                                           Maximum=999999,
@@ -1105,11 +1101,11 @@ class MainWindow(qtw.QMainWindow):
                                                           ),
                                 "order": qtw.QComboBox(),
                                 }
-                self.widgets["frequency"].valueChanged.connect(q_signals.gen_parameters_changed)
+                self.widgets["frequency"].valueChanged.connect(mw.gen_parameters_changed)
                 for i in [1, 2, 4]:
                     self.widgets["order"].addItem(str(i), i)
                 self.widgets["order"].setCurrentIndex(1)
-                self.widgets["order"].currentTextChanged.connect(q_signals.gen_parameters_changed)
+                self.widgets["order"].currentTextChanged.connect(mw.gen_parameters_changed)
 
                 # self.widgets["type"].addItems(["Disabled",
                 #                                "HP (zero phase)",
@@ -1121,7 +1117,7 @@ class MainWindow(qtw.QMainWindow):
                 # https://github.com/python-acoustics/python-acoustics/issues/240
 
                 self.widgets["type"].addItems(["Disabled", "HP", "LP"])
-                self.widgets["type"].currentTextChanged.connect(q_signals.gen_parameters_changed)
+                self.widgets["type"].currentTextChanged.connect(mw.gen_parameters_changed)
                 self.layout = qtw.QHBoxLayout()
 
                 for filter in self.widgets.values():
@@ -1130,7 +1126,7 @@ class MainWindow(qtw.QMainWindow):
         filts_layout, filts_widgets = [None] * self.no_of_filters, [None] * self.no_of_filters
 
         for i in range(self.no_of_filters):
-            filter = Filter()
+            filter = Filter(self)
             filts_layout[i], filts_widgets[i] = filter.layout, filter.widgets
 
         # Generator parameters form
@@ -1171,7 +1167,7 @@ class MainWindow(qtw.QMainWindow):
                                                   Value=0,
                                                   ToolTip="\n".join(["in Vrms, requested output voltage."])
                                                   )
-            level_widgets[i].valueChanged.connect(q_signals.play_parameters_changed)
+            level_widgets[i].valueChanged.connect(self.play_parameters_changed)
 
         speaker_nominal_impedance_widget = qtw.QDoubleSpinBox(Minimum=0.01,
                                                               Maximum=999,
@@ -1182,7 +1178,7 @@ class MainWindow(qtw.QMainWindow):
         speaker_nominal_power_widget = qtw.QLabel()
 
         play_in_loop_widget = qtw.QCheckBox(checked=True)
-        play_in_loop_widget.stateChanged.connect(q_signals.play_parameters_changed)
+        play_in_loop_widget.stateChanged.connect(self.play_parameters_changed)
 
         # Player parameters form
         player_params_widget = qtw.QWidget()
@@ -1445,8 +1441,8 @@ class MainWindow(qtw.QMainWindow):
         # %% Functions triggered by user through the GUI
         def gain_and_levels_button_clicked():
             sys_gain_widget = SysGainAndLevelsPopup(self.sys_params)
-            sys_gain_widget.user_changed_sys_params_signal.connect(q_signals.sys_parameters_changed)
-            sys_gain_widget.exec_()
+            sys_gain_widget.user_changed_sys_params_signal.connect(self.sys_parameters_changed)
+            sys_gain_widget.exec()
 
         def play_clicked():
             if hasattr(self, "generated_signal") and isinstance(self.generated_signal, TestSignal):
@@ -1563,7 +1559,7 @@ class MainWindow(qtw.QMainWindow):
                     update_sys_params_dict(self.sys_params)
                     self.generator.import_file(file_path)
                 else:
-                    q_signals.gen_signal_not_ready.emit("No file chosen.")
+                    self.gen_signal_not_ready.emit("No file chosen.")
                     self.generator.clear_imported_file()
 
             except Exception as e:
@@ -1604,7 +1600,7 @@ class MainWindow(qtw.QMainWindow):
         def disable_voltage_output_widgets_for_inactive_channels():
             for i, level_widget in level_widgets.items():
                 level_widget.setEnabled(i <= int(self.sys_params["channel_count"]))
-        q_signals.play_parameters_changed.connect(disable_voltage_output_widgets_for_inactive_channels)
+        self.play_parameters_changed.connect(disable_voltage_output_widgets_for_inactive_channels)
         disable_voltage_output_widgets_for_inactive_channels()
 
         # Disable frequency widget when sine is not selected
@@ -1627,7 +1623,7 @@ class MainWindow(qtw.QMainWindow):
         show_nominal_speaker_power()
 
         speaker_nominal_impedance_widget.valueChanged.connect(show_nominal_speaker_power)
-        q_signals.play_parameters_changed.connect(show_nominal_speaker_power)
+        self.play_parameters_changed.connect(show_nominal_speaker_power)
 
         # Change layout based on chosen tab
         def update_layout_based_on_chosen_tab(current_index):
@@ -1673,7 +1669,7 @@ class MainWindow(qtw.QMainWindow):
             else:
                 sample_rate_selector.setCurrentIndex(index_to_set)
             duration_widget.setValue(imported_signal.T)
-            q_signals.gen_signal_not_ready.emit(f"Imported successfully.\n{imported_signal.raw_import_analysis}"
+            self.gen_signal_not_ready.emit(f"Imported successfully.\n{imported_signal.raw_import_analysis}"
                                                 + "\n\nContinue setting up processing and press 'Generate' when ready.")
         self.generator.file_import_success.connect(generator_thread_file_import_success)
 
@@ -1700,7 +1696,7 @@ class MainWindow(qtw.QMainWindow):
         # Logging functionality
         def show_log(log_dict):
             log_win = LogView(log_dict)
-            log_win.exec_()
+            log_win.exec()
         self.player.publish_log.connect(show_log)
 
         # Output voltage request not feasible
@@ -1728,7 +1724,7 @@ class MainWindow(qtw.QMainWindow):
                 mpl_widget.update_plot(generated_signal)
 
             except Exception as e:
-                q_signals.gen_signal_not_ready.emit(
+                self.gen_signal_not_ready.emit(
                     "Failed to receive generated signal from generator thread.\n" + str(e))
             else:  # do this always
                 generated_signal_info_widget.setText(generator_info_text)
@@ -1746,7 +1742,7 @@ class MainWindow(qtw.QMainWindow):
             generated_signal_info_widget.repaint()  # why?
             self.generated_signal = None
 
-        q_signals.gen_signal_not_ready.connect(gen_signal_not_ready)
+        self.gen_signal_not_ready.connect(gen_signal_not_ready)
 
         @qtc.Slot(Exception)
         def generator_exception(e):
@@ -1795,17 +1791,19 @@ class MainWindow(qtw.QMainWindow):
         @qtc.Slot(str)
         def gen_parameters_changed(new_param):
             "When generator parameters changed"
+            "all kinds of parameters will end up being passed to this"
+            "e.g. sweep_freq_change will pass a float, a comcobox will pass in integer"
             if not (signal_type_selector.currentText() == "Imported" and not self.generated_signal):
                 generator_info_text = f'Parameter changed: {new_param}' + \
                     '\nPress "Generate" to generate signal.'
-                q_signals.gen_signal_not_ready.emit(generator_info_text)
-        q_signals.gen_parameters_changed.connect(gen_parameters_changed)
+                self.gen_signal_not_ready.emit(generator_info_text)
+        self.gen_parameters_changed.connect(gen_parameters_changed)
 
         @qtc.Slot()
         def play_parameters_changed_actions():
             "Player tab parameters changed"
             self.player.stop_play()
-        q_signals.play_parameters_changed.connect(play_parameters_changed_actions)
+        self.play_parameters_changed.connect(play_parameters_changed_actions)
 
         @qtc.Slot(dict)
         def sys_parameters_changed_actions(sys_params):
@@ -1817,7 +1815,7 @@ class MainWindow(qtw.QMainWindow):
             # setting the maximum value for the sweep voltage spin box here would be nice
             # but it depends on channel so not so simple to do
             update_sys_params_dict(sys_params)
-        q_signals.sys_parameters_changed.connect(sys_parameters_changed_actions)
+        self.sys_parameters_changed.connect(sys_parameters_changed_actions)
 
 
 # %% Matplotlib Widget
@@ -1894,4 +1892,4 @@ if __name__ == "__main__":
     qapp.setWindowIcon(qtg.QIcon('.\\data\\tsm.png'))
     mw = MainWindow(qapp)
     mw.show()
-    sys.exit(qapp.exec_())
+    sys.exit(qapp.exec())
