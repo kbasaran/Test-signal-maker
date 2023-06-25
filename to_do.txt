@@ -3,4 +3,4 @@ handling exceptions from player and other threads - set a consistent strategy
 use less memory - make generation faster (acoustics package is making everything 64-bit)
 
 first time import gives an error for unknown variable file name
-after channel numbers changed, the non-existent chammels do not disable automatically
+
