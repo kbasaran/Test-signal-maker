@@ -1067,8 +1067,8 @@ class MainWindow(qtw.QMainWindow):
 
         frequency_widget.valueChanged.connect(q_signals.gen_parameters_changed)
 
-        compression_widget = qtw.QDoubleSpinBox(Minimum=-5,
-                                                Maximum=5,
+        compression_widget = qtw.QDoubleSpinBox(Minimum=-10,
+                                                Maximum=10,
                                                 SingleStep=0.05,
                                                 )
         compression_widget.setToolTip("a > 0 is expansion, a = 0 is no change, a < 0 is compression."

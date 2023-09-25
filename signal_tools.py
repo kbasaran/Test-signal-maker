@@ -173,13 +173,22 @@ class TestSignal():
         if a == 0:
             return
         elif a > 0:  # expand
-            raise ValueError("Expansion has not implemented yet. "
-                             + "Please only use compression values smaller than 0.")
+        # y = sign(x).*exp((log(-1./(exp(log(abs(x + 1e-8))*k+log(a^k/(a^k+1)))-1))+log(abs(x + 1e-8))*k+log(a^k/(a^k+1)))/k)/a;
+            self.time_sig = np.sign(self.time_sig) * \
+                np.exp(
+                       (
+                           np.log(-1 / (np.exp(np.log(np.abs(self.time_sig + 1e-8)) * k + np.log(a**k/(a**k + 1))) - 1))
+                           + np.log(np.abs(self.time_sig + 1e-8)) * k
+                           + np.log(a**k/(a**k + 1))
+                        )
+                       / k
+                       ) / a
 
         elif a < 0:  # compress
+        # y = sign(x).*(((a*abs(x + 1e-8)).^k./((a*abs(x + 1e-8)).^k + 1)).^(1/k))/((a^k/(a^k + 1))^(1/k));
             self.time_sig = np.sign(self.time_sig) * (
                 ((a * np.abs(self.time_sig + 1e-8))**k
-                 / ((a*abs(self.time_sig + 1e-8))**k + 1))**(1 / k)) / ((a**k / (a**k + 1))**(1 / k))
+                 / ((a * np.abs(self.time_sig + 1e-8))**k + 1))**(1 / k)) / ((a**k / (a**k + 1))**(1 / k))
 
     def make_time_array(self, **kwargs):
         if self.sig_type == "Imported":
