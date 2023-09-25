@@ -30,7 +30,7 @@ logging.basicConfig(level=logging.INFO,
                     datefmt='%Y-%m-%d %H:%M:%S',
                     )
 
-release_version = "0.1.4+"
+release_version = "0.1.4+ (with expansion, 25.09.2023)"
 
 
 class FileImportDialog(qtw.QDialog):

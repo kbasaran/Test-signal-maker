@@ -166,29 +166,37 @@ class TestSignal():
     def apply_compression(self, **kwargs):
         """
         Based on AES standard noise generator, Aug. 9, 2007, Keele
+        Only works if input array is normalized to +/-1!!!
         """
         k = 4  # shape factor recommended from the AES tool
+        peak_value = np.max(np.abs(self.time_sig))
         a = kwargs.get("compression")
 
         if a == 0:
             return
+
         elif a > 0:  # expand
-        # y = sign(x).*exp((log(-1./(exp(log(abs(x + 1e-8))*k+log(a^k/(a^k+1)))-1))+log(abs(x + 1e-8))*k+log(a^k/(a^k+1)))/k)/a;
+            print("hop")
+        # y = sign(x).*exp((log(-1./(exp(log(abs(x + 1e-20))*k+log(a^k/(a^k+1)))-1))+log(abs(x + 1e-20))*k+log(a^k/(a^k+1)))/k)/a;
+            self.time_sig /= peak_value
             self.time_sig = np.sign(self.time_sig) * \
                 np.exp(
                        (
-                           np.log(-1 / (np.exp(np.log(np.abs(self.time_sig + 1e-8)) * k + np.log(a**k/(a**k + 1))) - 1))
-                           + np.log(np.abs(self.time_sig + 1e-8)) * k
+                           np.log(-1 / (np.exp(np.log(np.abs(self.time_sig + 1e-20)) * k + np.log(a**k/(a**k + 1))) - 1))
+                           + np.log(np.abs(self.time_sig + 1e-20)) * k
                            + np.log(a**k/(a**k + 1))
                         )
                        / k
                        ) / a
+            self.time_sig *= peak_value
 
         elif a < 0:  # compress
-        # y = sign(x).*(((a*abs(x + 1e-8)).^k./((a*abs(x + 1e-8)).^k + 1)).^(1/k))/((a^k/(a^k + 1))^(1/k));
+        # y = sign(x).*(((a*abs(x + 1e-20)).^k./((a*abs(x + 1e-20)).^k + 1)).^(1/k))/((a^k/(a^k + 1))^(1/k));
+            self.time_sig /= peak_value
             self.time_sig = np.sign(self.time_sig) * (
-                ((a * np.abs(self.time_sig + 1e-8))**k
-                 / ((a * np.abs(self.time_sig + 1e-8))**k + 1))**(1 / k)) / ((a**k / (a**k + 1))**(1 / k))
+                ((a * np.abs(self.time_sig + 1e-20))**k
+                 / ((a * np.abs(self.time_sig + 1e-20))**k + 1))**(1 / k)) / ((a**k / (a**k + 1))**(1 / k))
+            self.time_sig *= peak_value
 
     def make_time_array(self, **kwargs):
         if self.sig_type == "Imported":
