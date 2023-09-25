@@ -176,7 +176,6 @@ class TestSignal():
             return
 
         elif a > 0:  # expand
-            print("hop")
         # y = sign(x).*exp((log(-1./(exp(log(abs(x + 1e-20))*k+log(a^k/(a^k+1)))-1))+log(abs(x + 1e-20))*k+log(a^k/(a^k+1)))/k)/a;
             self.time_sig /= peak_value
             self.time_sig = np.sign(self.time_sig) * \
