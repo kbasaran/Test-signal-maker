@@ -68,10 +68,11 @@ class FileImportDialog(qtw.QDialog):
 # Popup window for warnings
 class PopupError():
     # https://www.techwithtim.net/tutorials/pyqt5-tutorial/messageboxes/
-    def __init__(self, text, informative_text=None, post_action=None):
+    def __init__(self, text, informative_text=None, post_action=None, title="Error"):
         msg = qtw.QMessageBox()
-        msg.setWindowTitle("Error")
+        msg.setWindowTitle(title)
         msg.setText(text)
+        # msg.setMinimumWidth(200)  # doesn't work
         msg.setInformativeText(informative_text)
         msg.setIcon(qtw.QMessageBox.Warning)
         msg.setStandardButtons(qtw.QMessageBox.Ok)
@@ -1637,7 +1638,7 @@ class MainWindow(qtw.QMainWindow):
 
         # Give a crest factor warning when IEC signal is selected
         signal_type_selector.currentIndexChanged.connect(
-            lambda: PopupError("IEC 268", "Apply a compression of -1 to get a crest factor of about 2.") if signal_type_selector.currentIndex() == 2 else None)
+            lambda: PopupError("IEC 268", "Apply a compression of\nabout -3 to get a crest\nfactor of 2.", title="Warning") if signal_type_selector.currentIndex() == 2 else None)
 
         # Show speaker nominal powers
         def show_nominal_speaker_power():
