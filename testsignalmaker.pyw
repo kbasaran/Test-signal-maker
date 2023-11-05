@@ -13,6 +13,7 @@ import acoustics as ac  # https://github.com/timmahrt/pyAcoustics
 import soundfile as sf  # https://python-soundfile.readthedocs.io/
 from scipy import signal
 import copy
+from datetime import datetime
 
 import matplotlib.pyplot as plt  # http://matplotlib.org/
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -864,7 +865,16 @@ class Player(qtc.QObject):
             self.is_play_in_loop = play_kwargs["loop"]
             self.play_pos = 0
 
-            status_info_text = "Playing..." if not play_kwargs["loop"] else "Playing in loop..."
+            # datetime object containing current date and time
+    
+            
+            # dd/mm/YY H:M:S
+
+
+            status_info_text = "---- Playing ----" if not play_kwargs["loop"] else "---- Playing in loop ----"
+            now = datetime.now()
+            status_info_text += f"\nStart time: {now.strftime('%B %d, %H:%M:%S')}"
+
             for cn in range(1, stream_settings["channels"] + 1):
                 channel_rms = self._ugs_play_voltages[cn]
                 channel_sys_gain = sys_params["system_gains"][cn]
