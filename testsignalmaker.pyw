@@ -214,7 +214,6 @@ class SysGainAndLevelsPopup(qtw.QDialog):
         preferred_device_widget.currentIndexChanged.connect(update_max_channel_count)
 
 
-
 class Generator(qtc.QObject):
 
     """
@@ -1836,11 +1835,12 @@ class MainWindow(qtw.QMainWindow):
             "System parameters changed"
             self.player.stop_play()
             self.player.set_sys_params(sys_params)
+            update_sys_params_dict(sys_params)
             logging.warning("System parameters changed by user.")
             sweep_channel.setMaximum(int(sys_params["channel_count"]))
+            disable_voltage_output_widgets_for_inactive_channels()
             # setting the maximum value for the sweep voltage spin box here would be nice
             # but it depends on channel so not so simple to do
-            update_sys_params_dict(sys_params)
         q_signals.sys_parameters_changed.connect(sys_parameters_changed_actions)
 
 
