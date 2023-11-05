@@ -30,7 +30,7 @@ logging.basicConfig(level=logging.INFO,
                     datefmt='%Y-%m-%d %H:%M:%S',
                     )
 
-release_version = "0.1.4+ (with expansion, 25.09.2023)"
+release_version = "0.1.5"
 
 
 class FileImportDialog(qtw.QDialog):
@@ -89,20 +89,31 @@ class SysGainAndLevelsPopup(qtw.QDialog):
     user_changed_sys_params_signal = qtc.Signal(dict)
     # channel_count_changed = qtc.Signal(int)
 
-    def __init__(self, current_sys_params):
-        super().__init__()
+    def __init__(self, current_sys_params, parent=None):
+        super().__init__(parent=parent)
         self.setWindowTitle("System parameters")
         self.setMinimumWidth(400)
         self.setMinimumHeight(200)
 
         # Form for gains
+        sys_gain_form_layout = qtw.QFormLayout()
+
+        preferred_device_name = current_sys_params["preferred_device"]
+
+        preferred_device_widget = qtw.QComboBox()
+        for device in sd.query_devices():
+            user_friendly_name = f"{device['name']} - {device['max_output_channels']} channels"
+            preferred_device_widget.addItem(user_friendly_name, device["name"])  # data is the pure name from sounddevice
+        preferred_device_index = preferred_device_widget.findData(preferred_device_name)  # -1 needs not found, and empty selection
+        preferred_device_widget.setCurrentIndex(preferred_device_index)  # does this raise an error if that device name is not in the combobox?
+        sys_gain_form_layout.addRow("Preferred device", preferred_device_widget)
+
         number_of_channels_widget = qtw.QSpinBox(Minimum=2,
                                                  Maximum=int(current_sys_params["max_channel_count"]),
                                                  ToolTip="Number of amplifier channels that should become available.",
                                                  Value=int(current_sys_params["channel_count"]),
                                                  )
 
-        sys_gain_form_layout = qtw.QFormLayout()
         sys_gain_form_layout.addRow("Active channels", number_of_channels_widget)
 
         channel_gain_widgets = {}
@@ -182,6 +193,7 @@ class SysGainAndLevelsPopup(qtw.QDialog):
 
         def save_and_close():
             sys_params = {}
+            sys_params["preferred_device"] = preferred_device_widget.currentData()
             sys_params["system_gains"] = {i: channel_gain_widgets[i].value() for i in channel_gain_widgets.keys()}
             sys_params["amp_peak"] = amp_peak_capability_widget.value()
             sys_params["channel_count"] = number_of_channels_widget.value()
@@ -191,8 +203,16 @@ class SysGainAndLevelsPopup(qtw.QDialog):
 
             self.user_changed_sys_params_signal.emit(sys_params)
             self.done(0)
-
         save_sys_gain_settings.clicked.connect(save_and_close)
+        
+        def update_max_channel_count(device_index):
+            device = sd.query_devices()[device_index]
+            number_of_channels_widget.setMaximum(max(device["max_output_channels"],
+                                                     int(current_sys_params["max_channel_count"]),
+                                                     )
+                                                 )
+        preferred_device_widget.currentIndexChanged.connect(update_max_channel_count)
+
 
 
 class Generator(qtc.QObject):
@@ -364,13 +384,15 @@ class Player(qtc.QObject):
             # if hasattr(self, "stream") and not self.stream.active:  # if stream is not active
                 # sd._terminate()
                 # sd._initialize()
-
-            play_device_idx = sd.default.device[1]
-            # 0 is the recording device
-            # returns int
+            
+            preferred_device_name = self._sys_params["preferred_device"]
+            device_name_to_index = {device["name"]: device["index"] for device in sd.query_devices()}
+            play_device_idx = device_name_to_index.get(preferred_device_name, sd.default.device[1])
+            # 0 is the recording device, 1 is playback
+            # sd.default.device returns (int, int)
 
             play_device_info = sd.query_devices(play_device_idx)
-            # this doesn't update when default sound device is changed in operating system
+            # this doesn't update when default sound device is changed in operating system :(
             # thus the trick above
             play_device_summary = f"""Device name: {play_device_info['name']}
 --Max. output channels: {play_device_info['max_output_channels']}
@@ -382,6 +404,7 @@ class Player(qtc.QObject):
 
         except Exception as e:
             play_device_summary = f"Exception while detecting sound devices.\n{e}"
+
         self.signal_sound_devices_polled.emit(play_device_summary)
 
     def calculate_digital_signal_rms(self, requested_voltages: dict, signal_CF: float) -> list:
@@ -1028,6 +1051,7 @@ class MainWindow(qtw.QMainWindow):
             else:
                 self.sys_params = {}
                 settings = qtc.QSettings('kbasaran', 'Test signal maker')
+                self.sys_params["preferred_device"] = settings.value("preferred_device", "default", type=str)
                 self.sys_params["amp_peak"] = settings.value("amp_peak", 99, type=float)
                 self.sys_params["max_channel_count"] = settings.value("max_channel_count", 10, type=int)
                 self.sys_params["channel_count"] = settings.value("channel_count", 2, type=int)
@@ -1886,8 +1910,7 @@ class MatplotlibWidget(qtw.QWidget):
         self.update_plot(None)
 
 
-# %% If running as main module
-if __name__ == "__main__":
+def main():
     qapp = qtw.QApplication.instance()
     if not qapp:
         qapp = qtw.QApplication(sys.argv)
@@ -1895,3 +1918,7 @@ if __name__ == "__main__":
     mw = MainWindow(qapp)
     mw.show()
     sys.exit(qapp.exec_())
+
+
+if __name__ == "__main__":
+    main()
