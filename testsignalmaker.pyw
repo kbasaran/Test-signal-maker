@@ -103,7 +103,8 @@ class SysGainAndLevelsPopup(qtw.QDialog):
         preferred_device_name = current_sys_params["preferred_device"]
 
         preferred_device_widget = qtw.QComboBox()
-        for device in sd.query_devices():
+        output_devices = [device for device in sd.query_devices() if device["max_output_channels"] > 0]
+        for device in output_devices:
             user_friendly_name = f"{device['name']} - {device['max_output_channels']} channels"
             preferred_device_widget.addItem(user_friendly_name, device["name"])  # data is the pure name from sounddevice
         preferred_device_index = preferred_device_widget.findData(preferred_device_name)  # -1 needs not found, and empty selection
