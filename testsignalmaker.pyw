@@ -1137,7 +1137,7 @@ class MainWindow(qtw.QMainWindow):
         sample_rate_selector = qtw.QComboBox()
         for i in [22050, 44100, 48000, 96000]:
             sample_rate_selector.addItem(str(i), i)
-        sample_rate_selector.setCurrentIndex(1)
+        sample_rate_selector.setCurrentIndex(2)
         sample_rate_selector.currentTextChanged.connect(q_signals.gen_parameters_changed)
 
         # Filters
