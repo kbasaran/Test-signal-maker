@@ -103,11 +103,16 @@ class SysGainAndLevelsPopup(qtw.QDialog):
         preferred_device_name = current_sys_params["preferred_device"]
 
         preferred_device_widget = qtw.QComboBox()
-        output_devices = [device for device in sd.query_devices() if device["max_output_channels"] > 0]
-        for device in output_devices:
-            user_friendly_name = f"{device['name']} - {device['max_output_channels']} channels"
-            preferred_device_widget.addItem(user_friendly_name, device["name"])  # data is the pure name from sounddevice
+        for device in sd.query_devices():
+            hostapi_name = sd.query_hostapis(index=device['hostapi'])['name']
+            if device["max_output_channels"] > 0 and "WDM" not in hostapi_name and "MME" not in hostapi_name:
+                device_name = device['name']
+                data_name = hostapi_name + " - " + device_name
+                user_friendly_name = f"{data_name} - {device['max_output_channels']} channels"
+                preferred_device_widget.addItem(user_friendly_name, data_name)  # data is the pure name from sounddevice
         preferred_device_index = preferred_device_widget.findData(preferred_device_name)  # -1 needs not found, and empty selection
+        if preferred_device_index == -1:
+            preferred_device_index = sd.default.device[1]
         preferred_device_widget.setCurrentIndex(preferred_device_index)  # does this raise an error if that device name is not in the combobox?
         sys_gain_form_layout.addRow("Preferred device", preferred_device_widget)
 
@@ -351,6 +356,9 @@ class Player(qtc.QObject):
         # receive sys params
         self.set_sys_params(sys_params)
 
+        # define the sound device based on settings and availability
+        self.find_right_sound_device()
+
     def reset_fade_out(self):
         self.fade_out_frames = {"remaining": np.nan,
                                 "total": np.nan,
@@ -377,6 +385,19 @@ class Player(qtc.QObject):
         logging.info("Audio stream stopped.")
         return None
 
+    def find_right_sound_device(self):
+        preferred_device_name = self._sys_params["preferred_device"]
+        device_name_to_index = {}
+        for device in sd.query_devices():
+            hostapi_name = sd.query_hostapis(index=device['hostapi'])['name']
+            device_name = device['name']
+            data_name = hostapi_name + " - " + device_name
+            device_name_to_index[data_name] = device["index"]
+
+        self.play_device_idx = device_name_to_index.get(preferred_device_name, sd.default.device[1])
+        # 0 is the recording device, 1 is playback
+        # sd.default.device returns (int, int)
+
     @qtc.Slot()
     def poll_sound_devices(self):
         try:
@@ -386,17 +407,13 @@ class Player(qtc.QObject):
             # if hasattr(self, "stream") and not self.stream.active:  # if stream is not active
                 # sd._terminate()
                 # sd._initialize()
-            
-            preferred_device_name = self._sys_params["preferred_device"]
-            device_name_to_index = {device["name"]: device["index"] for device in sd.query_devices()}
-            play_device_idx = device_name_to_index.get(preferred_device_name, sd.default.device[1])
-            # 0 is the recording device, 1 is playback
-            # sd.default.device returns (int, int)
+            self.find_right_sound_device()
 
-            play_device_info = sd.query_devices(play_device_idx)
+            play_device_info = sd.query_devices(self.play_device_idx)
             # this doesn't update when default sound device is changed in operating system :(
             # thus the trick above
             play_device_summary = f"""Device name: {play_device_info['name']}
+--Host API: {sd.query_hostapis()[play_device_info['hostapi']]["name"]}
 --Max. output channels: {play_device_info['max_output_channels']}
 --Default samplerate: {int(play_device_info['default_samplerate'])}
 --Default data type: {sd.default.dtype[1]}
@@ -474,6 +491,7 @@ class Player(qtc.QObject):
             self._bring_wave_states_to_zero(stream_settings["channels"])
 
             self.stream = sd.OutputStream(callback=self.callback,
+                                          device=self.play_device_idx,
                                           finished_callback=self.announce_callback_is_finished,
                                           **stream_settings,
                                           )
@@ -866,15 +884,9 @@ class Player(qtc.QObject):
             self.is_play_in_loop = play_kwargs["loop"]
             self.play_pos = 0
 
-            # datetime object containing current date and time
-    
-            
-            # dd/mm/YY H:M:S
-
-
             status_info_text = "---- Playing ----" if not play_kwargs["loop"] else "---- Playing in loop ----"
             now = datetime.now()
-            status_info_text += f"\nStart time: {now.strftime('%B %d, %H:%M:%S')}"
+            status_info_text += f"\nLocal time at start: {now.strftime('%B %d, %H:%M:%S')}"
 
             for cn in range(1, stream_settings["channels"] + 1):
                 channel_rms = self._ugs_play_voltages[cn]
@@ -1062,7 +1074,7 @@ class MainWindow(qtw.QMainWindow):
             else:
                 self.sys_params = {}
                 settings = qtc.QSettings('kbasaran', 'Test signal maker')
-                self.sys_params["preferred_device"] = settings.value("preferred_device", "default", type=str)
+                self.sys_params["preferred_device"] = settings.value("preferred_device", "Windows DirectSound - Primary Sound Driver", type=str)
                 self.sys_params["amp_peak"] = settings.value("amp_peak", 99, type=float)
                 self.sys_params["max_channel_count"] = settings.value("max_channel_count", 10, type=int)
                 self.sys_params["channel_count"] = settings.value("channel_count", 2, type=int)
@@ -1745,7 +1757,7 @@ class MainWindow(qtw.QMainWindow):
 
         # Update detected sound devices every N seconds
         self.poll_sound_devices_timer = qtc.QTimer()
-        self.poll_sound_devices_timer.setInterval(3000)
+        self.poll_sound_devices_timer.setInterval(2000)
         self.poll_sound_devices_timer.start()  # priority tanımlayınca interval devre dışı kaldı. garip.
 
         self.poll_sound_devices_timer.timeout.connect(self.player.poll_sound_devices)
