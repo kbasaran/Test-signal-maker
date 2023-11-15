@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt  # http://matplotlib.org/
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 
-from signal_tools import TestSignal, make_fade_window_n
+from generictools.signal_tools import TestSignal, make_fade_window_n
 
 import logging
 
