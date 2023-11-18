@@ -1436,7 +1436,7 @@ class MainWindow(qtw.QMainWindow):
         sweep_group_layout.addLayout(other_settings_section, 2)
 
         # ---- 'Write file' tab
-        file_rms_title = qtw.QLabel("File RMS level\n(xA + B, full scale)",
+        file_rms_title = qtw.QLabel("File RMS level (dBFS)\n20*log10(A) + B",
                                     alignment=qtc.Qt.AlignHCenter)
         self.file_rms_multiplier_widget = qtw.QDoubleSpinBox(Minimum=0.0001,
                                                              Value=1)
@@ -2027,7 +2027,7 @@ def main():
     qapp = qtw.QApplication.instance()
     if not qapp:
         qapp = qtw.QApplication(sys.argv)
-    qapp.setWindowIcon(qtg.QIcon('.\\data\\tsm.png'))
+        qapp.setWindowIcon(qtg.QIcon(app_definitions["icon_path"]))
     mw = MainWindow(qapp)
     mw.show()
     qapp.exec()
