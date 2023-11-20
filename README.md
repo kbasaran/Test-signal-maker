@@ -1,11 +1,4 @@
 # Test-Signal-Maker
-Required packages:
-scipy
-acoustics
-sounddevice
-soundfile
-matplotlib
-PySide2
 
 ![Image generator page](./screenshots/generator.png)
 
