@@ -1,9 +1,0 @@
-Write the correct version in the "release_version" parameter of the script first
-
-cxfreeze testsignalmaker.pyw --target-dir dist --packages "scipy,numpy" --base-name Win32GUI --icon .\data\tsm.ico
-
-copy "C:\Users\--user--\AppData\Local\Programs\Python\Python39\Lib\site-packages\_soundfile_data" into dist/lib
-copy License
-copy data
-copy extra
-add src folder
