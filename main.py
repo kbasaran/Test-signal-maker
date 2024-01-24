@@ -1809,7 +1809,7 @@ class MainWindow(qtw.QMainWindow):
             else:
                 sample_rate_selector.setCurrentIndex(index_to_set)
             duration_widget.setValue(imported_signal.T)
-            self.gen_signal_not_ready.emit(f"Imported successfully.\n{imported_signal.raw_import_analysis}"
+            self.gen_signal_not_ready.emit(f"Imported successfully.\n{imported_signal.initial_data_analysis}"
                                                 + "\n\nContinue setting up processing and press 'Generate' when ready.")
         self.generator.file_import_success.connect(generator_thread_file_import_success)
 
