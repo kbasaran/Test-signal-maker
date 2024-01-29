@@ -235,16 +235,16 @@ class SysGainAndLevelsPopup(qtw.QDialog):
         disable_inactive_channels_widgets(number_of_channels_widget.value())
 
         def save_and_close():
-            settings.update_attr("preferred_device", preferred_device_widget.currentData())
+            settings.update("preferred_device", preferred_device_widget.currentData())
             system_gains = list(settings.system_gains)
             for cn in channel_gain_widgets.keys():
                 system_gains[cn-1] = channel_gain_widgets[cn].value()
-            settings.update_attr("system_gains", tuple(system_gains))
-            settings.update_attr("amp_peak", amp_peak_capability_widget.value())
-            settings.update_attr("channel_count", number_of_channels_widget.value())
-            settings.update_attr("max_channel_count", settings.max_channel_count)  # so this stays fixed, no user option to change it yet
-            settings.update_attr("sweep_sample_rate", sweep_sample_rate.currentData())
-            settings.update_attr("stream_latency", stream_latency.currentData())
+            settings.update("system_gains", tuple(system_gains))
+            settings.update("amp_peak", amp_peak_capability_widget.value())
+            settings.update("channel_count", number_of_channels_widget.value())
+            settings.update("max_channel_count", settings.max_channel_count)  # so this stays fixed, no user option to change it yet
+            settings.update("sweep_sample_rate", sweep_sample_rate.currentData())
+            settings.update("stream_latency", stream_latency.currentData())
 
             self.user_changed_sys_params_signal.emit()
             self.done(0)
@@ -1095,11 +1095,11 @@ class Settings:
             self.author_short, settings_storage_title)
         self.read_all_from_registry()
 
-    def update_attr(self, attr_name, new_val):
+    def update(self, attr_name, new_val):
         if not new_val:
             return
         elif type(getattr(self, attr_name)) != type(new_val):
-            logging.warning(f"Settings.update_attr: Received value type {type(new_val)} does not match the original type {type(getattr(self, attr_name))}"
+            logging.warning(f"Settings.update: Received value type {type(new_val)} does not match the original type {type(getattr(self, attr_name))}"
                             f"\nValue: {new_val}")
 
         setattr(self, attr_name, new_val)
@@ -1697,7 +1697,7 @@ class MainWindow(qtw.QMainWindow):
                                                             f"Audio files ({file_formats})",
                                                             )[0]
                 if file_path:
-                    settings.update_attr("file_folder", os.path.dirname(file_path))
+                    settings.update("file_folder", os.path.dirname(file_path))
                     self.generator.import_file(file_path)
                 else:
                     self.gen_signal_not_ready.emit("No file chosen.")
@@ -1706,7 +1706,7 @@ class MainWindow(qtw.QMainWindow):
             except Exception as e:
                 error_text = "File import failed."
                 PopupError(error_text, str(e))
-                settings.update_attr("file_folder", "")
+                settings.update("file_folder", "")
 
         def generate_sweep(dial_value):
 
