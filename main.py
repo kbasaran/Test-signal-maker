@@ -1931,7 +1931,7 @@ class MainWindow(qtw.QMainWindow):
         @qtc.Slot(str)
         def gen_parameters_changed(new_param):
             "When generator parameters changed"
-            if not (signal_type_selector.currentText() == "Imported" and not self.generated_signal):
+            if signal_type_selector.currentText() != "Imported" or self.generated_signal:
                 generator_info_text = f'Parameter changed: {new_param}' + \
                     '\nPress "Generate" to generate signal.'
                 self.gen_signal_not_ready.emit(generator_info_text)
