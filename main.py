@@ -1929,9 +1929,10 @@ class MainWindow(qtw.QMainWindow):
         self.player.play_started.connect(play_started)
 
         @qtc.Slot(str)
-        def gen_parameters_changed(new_param):
+        def gen_parameters_changed(new_param="//"):
             "When generator parameters changed"
-            if signal_type_selector.currentText() != "Imported" or self.generated_signal:
+            if (signal_type_selector.currentText() != "Imported" or
+                    (hasattr(self, "generated_signal") and isinstance(self.generated_signal, TestSignal))):
                 generator_info_text = f'Parameter changed: {new_param}' + \
                     '\nPress "Generate" to generate signal.'
                 self.gen_signal_not_ready.emit(generator_info_text)
