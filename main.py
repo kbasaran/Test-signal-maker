@@ -60,10 +60,10 @@ import logging
 
 home_folder = os.path.expanduser("~")
 logging.basicConfig(level=logging.INFO,
-                    filename=os.path.join(home_folder, 'tsm.log'),
-#                    encoding='utf-8',
+                    # filename=os.path.join(home_folder, 'tsm.log'),
+                    # encoding='utf-8',
                     format='%(asctime)s %(levelname)s - %(funcName)s: %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S',
+                    # datefmt='%Y-%m-%d %H:%M:%S',
                     )
 
 
@@ -1972,13 +1972,13 @@ class MatplotlibWidget(qtw.QWidget):
         fig.tight_layout()
 
     def calculate_3rd_octave_bands(self, time_sig: np.array, FS) -> tuple:
+        start_time = pyt_time.perf_counter()
         sig = time_sig.astype("float32")
         threeoct_freqs = ac.standards.iec_61260_1_2014.NOMINAL_THIRD_OCTAVE_CENTER_FREQUENCIES
 
         if len(time_sig) <= 2**21:
-            return (threeoct_freqs,
-                    ac.signal.third_octaves(sig, FS, frequencies=threeoct_freqs)[1] + 20 * np.log10(20e-6),
-                    )
+            result = threeoct_freqs, ac.signal.third_octaves(sig, FS, frequencies=threeoct_freqs)[1] + 20 * np.log10(20e-6),
+                    
         else:
             n_arrays = len(time_sig) // 2**20
             logging.debug(f"Calculating octave bands by dividing signal into {n_arrays} pieces.")
@@ -1989,7 +1989,9 @@ class MatplotlibWidget(qtw.QWidget):
                 third_oct_pows[i, :] = 10**(ac.signal.third_octaves(array, FS,
                                                                     frequencies=threeoct_freqs)[1] / 10)
             third_oct_pow_averages = (10 * np.log10(np.average(third_oct_pows, axis=0))) - 94
-            return (threeoct_freqs, third_oct_pow_averages)
+            result = threeoct_freqs, third_oct_pow_averages
+        
+        logging.debug(f"Calculated 3rd octave bands in {pyt_time.perf_counter() - start_time:.2f}s")
 
     @qtc.Slot(TestSignal)
     def update_plot(self, generated_signal):
