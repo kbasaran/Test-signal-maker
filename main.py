@@ -529,12 +529,12 @@ class Player(qtc.QObject):
                                           **stream_settings,
                                           )
             self.fade_window_size = int(self.stream.samplerate // 10)
-            self.ugs_play_elapsed_time = -1.
+            self.ugs_play_timer = -1.
 
     def _bring_wave_states_to_zero(self, channel_count):
         self._omega_last = 0.
         self._theta_last = 0.
-        self._sweep_level_last = {channel: 0. for channel in range(1, channel_count + 1)}
+        self._sweep_level_last = 0.
 
 
     @qtc.Slot()
@@ -590,7 +590,7 @@ class Player(qtc.QObject):
         pass
 
     def callback_for_ugs(self, frames):
-        # We are doing a callback for streaming an already generated signal ------------------
+        "We are doing a callback for streaming an already generated signal"
         do_callback_stop = False
         try:
             # Try to fill the soundcard buffer within this loop
@@ -679,18 +679,18 @@ class Player(qtc.QObject):
 
             # Make a table with correct rms signal levels
             initial_rms = self.user_gen_signal.RMS
-            ugs_play_rms_levels = [None] * self.stream.channels
+            ugs_play_rms_levels = np.empty(self.stream.channels)
             for channel in range(1, self.stream.channels + 1):
                 ugs_play_rms_levels[channel - 1] = self._ugs_play_signal_rms[channel]
             if self.log_output_signal:
                 logging.debug(f"User generated signal play levels: {ugs_play_rms_levels:.4f}")
 
-            if self.ugs_play_elapsed_time == -1.:
+            if self.ugs_play_timer == -1.:
                 self.log_through_thread.emit(f"Started with: {self._ugs_play_voltages}Vrms")
-            self.ugs_play_elapsed_time += self.stream.latency
-            if self.ugs_play_elapsed_time > 60 * 60 * 6:  # 6 is a correction factor. latency value from sound card is incorrect
+            self.ugs_play_timer = pyt_time.time()
+            if pyt_time.time() > self.ugs_play_timer + 60 * 60:  # every hour
                 self.log_through_thread.emit(f"Ongoing with: {self._ugs_play_voltages}Vrms")
-                self.ugs_play_elapsed_time = 0.
+                self.ugs_play_timer = pyt_time.time()
             return mono_signal_chunk, initial_rms, ugs_play_rms_levels, do_callback_stop
 
         except Exception as e:
@@ -700,7 +700,7 @@ class Player(qtc.QObject):
             raise sd.CallbackAbort  # why?
 
     def callback_for_sweep(self, frames):
-        # We are doing a frequency generator callback --------------------
+        "We are doing a frequency generator callback"
         do_callback_stop = False
 
         try:
@@ -752,12 +752,11 @@ class Player(qtc.QObject):
 
             # set the signals to rms = 1 and also do the smooth crossing between voltages
             logging.debug(f"self._sweep_level_last, self._sweep_signal_rms: {self._sweep_level_last}, {self._sweep_signal_rms}")
-            mono_signal_chunk = mono_signal_chunk  / np.exp2(-0.5)\
-                * make_fade_window_n(self._sweep_level_last[self._sweep_channel],
-                                     self._sweep_signal_rms[self._sweep_channel],
-                                     frames,
-                                     )
-            self._sweep_level_last[self._sweep_channel] = self._sweep_signal_rms[self._sweep_channel]
+            mono_signal_chunk = mono_signal_chunk  / np.exp2(-0.5) * make_fade_window_n(self._sweep_level_last,
+                                                                                        self._sweep_signal_rms,
+                                                                                        frames,
+                                                                                        )
+            self._sweep_level_last = self._sweep_signal_rms
 
             # If this was the last fade-out callback and calling back needs to stop
             if self.fade_out_frames["remaining"] <= frames:
@@ -794,10 +793,11 @@ class Player(qtc.QObject):
             target_rms_levels = np.zeros(self.stream.channels)
             logging.debug(f"_sweep_channel, _sweep_signal_rms: {self._sweep_channel}, {self._sweep_signal_rms}")
             target_rms_levels[self._sweep_channel - 1] = 1
+            # dynamic level adjustment is handled in the fade functions (ramping). therefore here the gain is neutral.
             logging.debug(f"Sweep levels: {target_rms_levels}")
 
             # Tell Main window which frequency you are at
-            if self._sweep_signal_rms[self._sweep_channel] == 0 or target_omega == 0:
+            if self._sweep_signal_rms == 0 or target_omega == 0:
                 self.sweep_generated.emit(np.nan, self.stream.latency)
             else:
                 self.sweep_generated.emit(self._omega_last / 2 / np.pi, self.stream.latency)
@@ -833,9 +833,11 @@ class Player(qtc.QObject):
             mono_signal_chunk = np.zeros(frames)          
             logging.debug("Nothing to play for the callback. Put in zeros.")
 
+        # Play a user generated signal
         elif self.play_pos is not None:
             mono_signal_chunk, initial_rms, target_rms_levels, do_callback_stop = self.callback_for_ugs(frames)
 
+        # Play a sweep
         elif (not np.isnan(self.user_req_alpha)) or (not np.isnan(self.user_req_omega)):
             mono_signal_chunk, initial_rms, target_rms_levels, do_callback_stop = self.callback_for_sweep(frames)
 
@@ -843,7 +845,7 @@ class Player(qtc.QObject):
         indata[:frames, :self.stream.channels] = mono_signal_chunk\
             .repeat(self.stream.channels, axis=0)\
             .reshape(frames, self.stream.channels)\
-            / initial_rms * np.array(target_rms_levels)  # scale for correct voltage
+            / initial_rms * np.array(target_rms_levels)  # scale for correct voltages
 
         # log the output signal
         if self.log_output_signal:
@@ -989,8 +991,8 @@ class Player(qtc.QObject):
         self._sweep_voltage = float(voltage)
 
         if not hasattr(self, "_sweep_signal_rms"):
-            self._sweep_signal_rms = {}
-        self._sweep_signal_rms[self._sweep_channel] = rms_required
+            self._sweep_signal_rms = 0.
+        self._sweep_signal_rms = rms_required
 
         logging.debug("Sweep level updated in player.")
 
@@ -1374,6 +1376,7 @@ class MainWindow(qtw.QMainWindow):
         voltage_spin_box_label = qtw.QLabel("Voltage")
         voltage_spin_box_label.setSizePolicy(qtw.QSizePolicy.Preferred, qtw.QSizePolicy.Maximum)
         voltage_spin_box = qtw.QDoubleSpinBox(Font=qtg.QFont("AnyStyle", 18))
+        voltage_spin_box.setValue(1)
 
         # voltage_spin_box.lineEdit().setReadOnly(True)  # for safety
         voltage_spin_box.setSingleStep(0.1)
@@ -1579,6 +1582,8 @@ class MainWindow(qtw.QMainWindow):
 
         # ---- Functions triggered by user through the GUI
         def gain_and_levels_button_clicked():
+            self.player.stop_play()
+            self.player.poll_sound_devices()
             sys_gain_widget = SysGainAndLevelsPopup()
             sys_gain_widget.user_changed_sys_params_signal.connect(self.sys_parameters_changed)
             sys_gain_widget.exec()
@@ -1948,6 +1953,8 @@ class MainWindow(qtw.QMainWindow):
             logging.warning("System parameters changed by user.")
             sweep_channel.setMaximum(int(settings.channel_count))
             disable_voltage_output_widgets_for_inactive_channels()
+            self.player.set_sweep_level(voltage_spin_box.value())  # due to a bug where the levels are not updated
+            # after system gain settings are changed by user
             # setting the maximum value for the sweep voltage spin box here would be nice
             # but it depends on channel so not so simple to do
         self.sys_parameters_changed.connect(sys_parameters_changed_actions)
