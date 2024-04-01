@@ -21,7 +21,7 @@ __email__ = "kbasaran@gmail.com"
 from pathlib import Path
 
 app_definitions = {"app_name": "Test Signal Maker",
-                   "version": "0.2.0",
+                   "version": "0.2.1",
                    # "version": "Test build " + today.strftime("%Y.%m.%d"),
                    "description": "Test Signal Maker - Loudspeaker test signal tool",
                    "copyright": "Copyright (C) 2023 Kerem Basaran",
@@ -43,7 +43,6 @@ from PySide6 import QtGui as qtg
 
 import sounddevice as sd  # https://python-sounddevice.readthedocs.io
 import numpy as np
-import acoustics as ac  # https://github.com/timmahrt/pyAcoustics
 import soundfile as sf  # https://python-soundfile.readthedocs.io/
 from scipy import signal
 import copy
@@ -53,19 +52,17 @@ import matplotlib.pyplot as plt  # http://matplotlib.org/
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 
-from generictools.signal_tools import TestSignal, make_fade_window_n
+from generictools.signal_tools import TestSignal, make_fade_window_n, calculate_3rd_octave_bands
 from dataclasses import dataclass, fields
-
 import logging
 
 home_folder = os.path.expanduser("~")
-logging.basicConfig(level=logging.INFO,
-                    # filename=os.path.join(home_folder, 'tsm.log'),
+logging.basicConfig(level=logging.DEBUG,
+                    filename=os.path.join(home_folder, '.tsm.log'),
                     # encoding='utf-8',
                     format='%(asctime)s %(levelname)s - %(funcName)s: %(message)s',
                     # datefmt='%Y-%m-%d %H:%M:%S',
                     )
-
 
 
 class FileImportDialog(qtw.QDialog):
@@ -1184,7 +1181,7 @@ class MainWindow(qtw.QMainWindow):
 
         duration_widget = qtw.QDoubleSpinBox(Minimum=1,
                                              Maximum=60*10,
-                                             Value=10,
+                                             Value=60,
                                              Decimals=2,
                                              ToolTip="Duration of generated signal in seconds."
                                                      "\nMaximum allowed value is 600."
@@ -1971,27 +1968,7 @@ class MatplotlibWidget(qtw.QWidget):
         self.ax = fig.add_subplot(111)
         fig.tight_layout()
 
-    def calculate_3rd_octave_bands(self, time_sig: np.array, FS) -> tuple:
-        start_time = pyt_time.perf_counter()
-        sig = time_sig.astype("float32")
-        threeoct_freqs = ac.standards.iec_61260_1_2014.NOMINAL_THIRD_OCTAVE_CENTER_FREQUENCIES
 
-        if len(time_sig) <= 2**21:
-            result = threeoct_freqs, ac.signal.third_octaves(sig, FS, frequencies=threeoct_freqs)[1] + 20 * np.log10(20e-6),
-                    
-        else:
-            n_arrays = len(time_sig) // 2**20
-            logging.debug(f"Calculating octave bands by dividing signal into {n_arrays} pieces.")
-            arrays = np.array_split(time_sig, n_arrays)
-            third_oct_pows = np.empty((n_arrays, len(threeoct_freqs)))
-
-            for i, array in enumerate(arrays):
-                third_oct_pows[i, :] = 10**(ac.signal.third_octaves(array, FS,
-                                                                    frequencies=threeoct_freqs)[1] / 10)
-            third_oct_pow_averages = (10 * np.log10(np.average(third_oct_pows, axis=0))) - 94
-            result = threeoct_freqs, third_oct_pow_averages
-        
-        logging.debug(f"Calculated 3rd octave bands in {pyt_time.perf_counter() - start_time:.2f}s")
 
     @qtc.Slot(TestSignal)
     def update_plot(self, generated_signal):
@@ -2006,10 +1983,10 @@ class MatplotlibWidget(qtw.QWidget):
                                       scaling="spectrum")
 
             # Power per octave band of signal
-            threeoct_freqs, three_oct_power = self.calculate_3rd_octave_bands(generated_signal.time_sig, FS)
+            center_frequencies, three_oct_power = calculate_3rd_octave_bands(generated_signal.time_sig, FS)
 
             self.ax.semilogx(PowerSpect[0], 10*np.log10(PowerSpect[1]), label="Power spectral density")
-            self.ax.step(threeoct_freqs, three_oct_power, where="mid", label="1/3 octave bands")
+            self.ax.step(center_frequencies, three_oct_power, where="mid", label="1/3 octave bands")
 
             self.ax.set_xlim(10, FS/2)
             self.ax.set_ylim(-70, 5)
@@ -2025,6 +2002,7 @@ class MatplotlibWidget(qtw.QWidget):
 
 def main():
     global settings, app_definition
+    logging.info("Starting application")
     settings = Settings(app_definitions["app_name"])
 
     qapp = qtw.QApplication.instance()
