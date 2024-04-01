@@ -24,7 +24,7 @@ app_definitions = {"app_name": "Test Signal Maker",
                    "version": "0.2.1",
                    # "version": "Test build " + today.strftime("%Y.%m.%d"),
                    "description": "Test Signal Maker - Loudspeaker test signal tool",
-                   "copyright": "Copyright (C) 2023 Kerem Basaran",
+                   "copyright": "Copyright (C) 2024 Kerem Basaran",
                    "icon_path": str(Path("./logo/icon.ico")),
                    "author": "Kerem Basaran",
                    "author_short": "kbasaran",
@@ -61,7 +61,7 @@ logging.basicConfig(level=logging.DEBUG,
                     filename=os.path.join(home_folder, '.tsm.log'),
                     # encoding='utf-8',
                     format='%(asctime)s %(levelname)s - %(funcName)s: %(message)s',
-                    # datefmt='%Y-%m-%d %H:%M:%S',
+                    datefmt='%Y-%m-%d %H:%M:%S',
                     )
 
 
@@ -141,11 +141,15 @@ class SysGainAndLevelsPopup(qtw.QDialog):
                 device_name = device['name']
                 data_name = hostapi_name + " - " + device_name
                 user_friendly_name = f"{data_name} - {device['max_output_channels']} channels"
+                if device["index"] == sd.default.device[1]:
+                    default_device_user_friendly_name = user_friendly_name
                 preferred_device_widget.addItem(user_friendly_name, data_name)  # data is the pure name from sounddevice. sometimes duplicate.
         preferred_device_index = preferred_device_widget.findData(preferred_device_name)  # -1 needs not found, and empty selection
         if preferred_device_index == -1:
-            preferred_device_index = sd.default.device[1]
-        preferred_device_widget.setCurrentIndex(preferred_device_index)  # does this raise an error if that device name is not in the combobox?
+            preferred_device_widget.setCurrentText(default_device_user_friendly_name)  # does this raise an error if that device name is not in the combobox?
+        else:
+            preferred_device_widget.setCurrentIndex(preferred_device_index)
+
         sys_gain_form_layout.addRow("Preferred device", preferred_device_widget)
 
         number_of_channels_widget = qtw.QSpinBox(Minimum=2,
@@ -184,7 +188,7 @@ class SysGainAndLevelsPopup(qtw.QDialog):
         current_val_idx = sweep_sample_rate.findData(current_val)
 
         if current_val_idx == -1:  # if the sapmle rate is not available in current list
-            sweep_sample_rate.setCurrentIndex(0)
+            sweep_sample_rate.setCurrentIndex(1)
         else:
             sweep_sample_rate.setCurrentIndex(current_val_idx)
 
@@ -444,7 +448,6 @@ class Player(qtc.QObject):
                 # sd._terminate()
                 # sd._initialize()
             self.find_right_sound_device()
-
             play_device_info = sd.query_devices(self.play_device_idx)
             # this doesn't update when default sound device is changed in operating system :(
             # thus the trick above
