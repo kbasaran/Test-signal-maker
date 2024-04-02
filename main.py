@@ -55,6 +55,7 @@ from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as Navigatio
 from generictools.signal_tools import TestSignal, make_fade_window_n, calculate_3rd_octave_bands
 from dataclasses import dataclass, fields
 import logging
+import multiprocessing
 
 home_folder = os.path.expanduser("~")
 logging.basicConfig(level=logging.DEBUG,
@@ -1624,6 +1625,7 @@ class MainWindow(qtw.QMainWindow):
                     "signal_object": self.generated_signal,
                     "loop": play_in_loop_widget.checkState(),
                     "requested_voltages": requested_voltages,
+                    "stop_after_min": stop_after_widget.value(),
                     }
 
                 self.player.ugs_play(stream_settings, play_kwargs)
@@ -1994,8 +1996,6 @@ class MatplotlibWidget(qtw.QWidget):
         self.ax = fig.add_subplot(111)
         fig.tight_layout()
 
-
-
     @qtc.Slot(TestSignal)
     def update_plot(self, generated_signal):
         self.ax.cla()
@@ -2028,6 +2028,9 @@ class MatplotlibWidget(qtw.QWidget):
 
 def main():
     global settings, app_definition
+    if os.name == "nt":
+        # bug: https://stackoverflow.com/questions/22644805/cx-freeze-creates-multiple-instances-of-program
+        multiprocessing.freeze_support()
     logging.info("Starting application")
     settings = Settings(app_definitions["app_name"])
 
