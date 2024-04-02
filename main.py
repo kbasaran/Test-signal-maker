@@ -1067,6 +1067,7 @@ class FileWriter(qtc.QThread):
 
 
 class PlayerLogger(qtc.QThread):
+    # Why do I need this???
     def __init__(self):
         super().__init__()
         # self.setPriority(qtc.QThread.LowestPriority)
@@ -1152,7 +1153,6 @@ class MainWindow(qtw.QMainWindow):
         # Main UI code goes here
         self.setMinimumWidth(1024)
         self.setWindowTitle(app_definitions["app_name"])
-
 
         # ---- 'Generate' tab
         signal_type_selector = qtw.QComboBox()
@@ -1292,6 +1292,15 @@ class MainWindow(qtw.QMainWindow):
         play_in_loop_widget = qtw.QCheckBox(checked=True)
         play_in_loop_widget.stateChanged.connect(self.play_parameters_changed)
 
+        stop_after_widget = qtw.QSpinBox(Minimum=0,
+                                         Value=0,
+                                         ToolTip=("Stop the playback after the user defined period of time"
+                                                  " is passed. Value is in minutes. '0' means disabled."
+                                                  ),
+                                         )
+        stop_after_widget.setEnabled(False)
+        stop_after_widget.valueChanged.connect(self.play_parameters_changed)
+
         # Player parameters form
         player_params_widget = qtw.QWidget()
         play_params_form_layout = qtw.QFormLayout()
@@ -1306,6 +1315,7 @@ class MainWindow(qtw.QMainWindow):
         for i in level_widgets.keys():
             play_params_form_layout.addRow(f"Output voltage for Ch. {i}", level_widgets[i])
         play_params_form_layout.addRow("Play in loop", play_in_loop_widget)
+        play_params_form_layout.addRow("Stop after (minutes)", stop_after_widget)
         play_params_form_layout.addRow("Speaker nominal impedance", speaker_nominal_impedance_widget)
         play_params_form_layout.addRow("Nominal power at speaker", speaker_nominal_power_widget)
 
@@ -1381,7 +1391,7 @@ class MainWindow(qtw.QMainWindow):
         voltage_spin_box = qtw.QDoubleSpinBox(Font=qtg.QFont("AnyStyle", 18))
         voltage_spin_box.setValue(1)
 
-        # voltage_spin_box.lineEdit().setReadOnly(True)  # for safety
+        # voltage_spin_box.lineEdit().setReadOnly(True)  # for safety during development
         voltage_spin_box.setSingleStep(0.1)
 
         sweep_channel_label = qtw.QLabel("Channel")
@@ -1529,19 +1539,20 @@ class MainWindow(qtw.QMainWindow):
         mw_left_widget.setMinimumWidth(500)
         mw_left_widget.setSizePolicy(qtw.QSizePolicy.Minimum, qtw.QSizePolicy.Minimum)
 
-        # Layout Right side
+        # ---- Layout Right side (generated signal data)
         mw_right_widget = qtw.QWidget()
-        mw_right_layout = qtw.QVBoxLayout()
+        mw_right_layout = qtw.QVBoxLayout(mw_right_widget)
+        # mw_right_widget.setLayout(mw_right_layout) already given in above line to layout
+
         mw_right_layout.addWidget(qtw.QLabel("<b>Generated Signal</b>"),
                                   alignment=qtc.Qt.AlignHCenter,
                                   )
-        mw_right_layout.addWidget(generated_signal_info_widget)
-        mw_right_widget.setLayout(mw_right_layout)
+        mw_right_layout.addWidget(generated_signal_info_widget, 1)
 
         mpl_widget = MatplotlibWidget(self)
         mpl_widget.setMinimumWidth(400)
         mpl_widget.canvas.setSizePolicy(qtw.QSizePolicy.MinimumExpanding, qtw.QSizePolicy.Expanding)
-        mw_right_layout.addWidget(mpl_widget)
+        mw_right_layout.addWidget(mpl_widget, 2)
         mw_right_layout.addWidget(qtw.QFrame(FrameShape=qtw.QFrame.HLine,
                                              FrameShadow=qtw.QFrame.Sunken),
                                   )
@@ -1549,7 +1560,7 @@ class MainWindow(qtw.QMainWindow):
         mw_right_layout.addWidget(qtw.QLabel("<b>Player status</b>"),
                                   alignment=qtc.Qt.AlignHCenter,
                                   )
-        mw_right_layout.addWidget(status_info_widget)
+        mw_right_layout.addWidget(status_info_widget, 2)
 
         # Layout Top Level
         mw_center_widget = qtw.QWidget()
@@ -1714,7 +1725,6 @@ class MainWindow(qtw.QMainWindow):
                 settings.update("file_folder", "")
 
         def generate_sweep(dial_value):
-
             f_start = 10
             f_end = 2e4
             dial_max_value = 4095
@@ -1814,8 +1824,10 @@ class MainWindow(qtw.QMainWindow):
             else:
                 sample_rate_selector.setCurrentIndex(index_to_set)
             duration_widget.setValue(imported_signal.T)
-            self.gen_signal_not_ready.emit(f"Imported successfully.\n{imported_signal.initial_data_analysis}"
-                                                + "\n\nContinue setting up processing and press 'Generate' when ready.")
+            self.gen_signal_not_ready.emit((f"Imported successfully.\n{imported_signal.initial_data_analysis}"
+                                            "\n\nContinue setting up processing and press 'Generate' when ready."
+                                            )
+                                           )
         self.generator.file_import_success.connect(generator_thread_file_import_success)
 
         def update_sweep_info_screen(freq, latency):
@@ -1834,9 +1846,9 @@ class MainWindow(qtw.QMainWindow):
 
         # Log something through the thread
         @qtc.Slot(str)
-        def log_with_thread(message):
+        def player_log_through_thread(message):
             self.player_logger.log(f"Player: {message}")
-        self.player.log_through_thread.connect(log_with_thread)
+        self.player.log_through_thread.connect(player_log_through_thread)
 
         # Logging functionality
         def show_log(log_dict):
