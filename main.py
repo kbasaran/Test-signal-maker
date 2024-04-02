@@ -1490,12 +1490,14 @@ class MainWindow(qtw.QMainWindow):
         # Message box widgets
         generated_signal_info_widget = qtw.QTextEdit(readOnly=True)
         generated_signal_info_widget.setSizePolicy(qtw.QSizePolicy.MinimumExpanding,
-                                                   qtw.QSizePolicy.Preferred)
+                                                   qtw.QSizePolicy.Preferred,
+                                                   )
         # Is there a way to set the size policies with constructor arguments?
 
         status_info_widget = qtw.QTextEdit(readOnly=True)
         status_info_widget.setSizePolicy(qtw.QSizePolicy.MinimumExpanding,
-                                         qtw.QSizePolicy.Preferred)
+                                         qtw.QSizePolicy.Preferred,
+                                         )
 
         # ---- About tab
         about_group = qtw.QLabel(alignment=qtc.Qt.AlignCenter)
@@ -1544,15 +1546,17 @@ class MainWindow(qtw.QMainWindow):
         mw_right_layout = qtw.QVBoxLayout(mw_right_widget)
         # mw_right_widget.setLayout(mw_right_layout) already given in above line to layout
 
-        mw_right_layout.addWidget(qtw.QLabel("<b>Generated Signal</b>"),
+        mw_right_layout.addWidget(qtw.QLabel("<b>Generated Signal Information</b>"),
                                   alignment=qtc.Qt.AlignHCenter,
                                   )
-        mw_right_layout.addWidget(generated_signal_info_widget, 1)
+        mw_right_layout.addWidget(generated_signal_info_widget)
 
         mpl_widget = MatplotlibWidget(self)
         mpl_widget.setMinimumWidth(400)
-        mpl_widget.canvas.setSizePolicy(qtw.QSizePolicy.MinimumExpanding, qtw.QSizePolicy.Expanding)
-        mw_right_layout.addWidget(mpl_widget, 2)
+        mpl_widget.canvas.setSizePolicy(qtw.QSizePolicy.MinimumExpanding,
+                                        qtw.QSizePolicy.Expanding,
+                                        )
+        mw_right_layout.addWidget(mpl_widget)
         mw_right_layout.addWidget(qtw.QFrame(FrameShape=qtw.QFrame.HLine,
                                              FrameShadow=qtw.QFrame.Sunken),
                                   )
@@ -1560,7 +1564,7 @@ class MainWindow(qtw.QMainWindow):
         mw_right_layout.addWidget(qtw.QLabel("<b>Player status</b>"),
                                   alignment=qtc.Qt.AlignHCenter,
                                   )
-        mw_right_layout.addWidget(status_info_widget, 2)
+        mw_right_layout.addWidget(status_info_widget)
 
         # Layout Top Level
         mw_center_widget = qtw.QWidget()
