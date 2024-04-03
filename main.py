@@ -1,5 +1,5 @@
 # Test Signal Maker - Loudspeaker testing tool
-# Copyright (C) 2023 - Kerem Basaran
+# Copyright (C) 2024 - Kerem Basaran
 # https://github.com/kbasaran
 __email__ = "kbasaran@gmail.com"
 
@@ -21,7 +21,7 @@ __email__ = "kbasaran@gmail.com"
 from pathlib import Path
 
 app_definitions = {"app_name": "Test Signal Maker",
-                   "version": "0.2.1",
+                   "version": "0.2.2",
                    # "version": "Test build " + today.strftime("%Y.%m.%d"),
                    "description": "Test Signal Maker - Loudspeaker test signal tool",
                    "copyright": "Copyright (C) 2024 Kerem Basaran",
@@ -53,6 +53,7 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 
 from generictools.signal_tools import TestSignal, make_fade_window_n, calculate_3rd_octave_bands
+import generictools.personalized_widgets as pwi
 from dataclasses import dataclass, fields
 import logging
 import multiprocessing
@@ -484,7 +485,7 @@ class Player(qtc.QObject):
 
         if max(peak_for_digital_signals.values()) > 1:
             error_text = "Current settings will cause digital clipping at sound card output."
-            informative_text = ("Increase amplifier gain or reduce target RMS voltage and/or crest factor."
+            informative_text = ("Increase amplifier gain or reduce target RMS voltage and/or signal crest factor."
                                 + "\nMake sure system gain is entered correctly."
                                 )
             self.stop_play()
@@ -924,8 +925,12 @@ class Player(qtc.QObject):
             self.play_pos = 0
 
             status_info_text = "---- Playing ----" if not play_kwargs["loop"] else "---- Playing in loop ----"
-            now = datetime.now()
-            status_info_text += f"\nLocal time at start: {now.strftime('%B %d, %H:%M:%S')}"
+            now = pyt_time.time()
+            status_info_text += f"\nLocal time at start: {datetime.fromtimestamp(now).strftime('%B %d, %H:%M:%S')}"
+            stop_after_seconds = play_kwargs.get("stop_after_seconds", 0)
+            if stop_after_seconds > 0:
+                stop_time = now + play_kwargs["stop_after_seconds"]
+                status_info_text += f"\nLocal time to stop: {datetime.fromtimestamp(stop_time).strftime('%B %d, %H:%M:%S')}"
 
             for cn in range(1, stream_settings["channels"] + 1):
                 channel_rms = self._ugs_play_voltages[cn]
@@ -1139,6 +1144,58 @@ class Settings:
         return str(self.as_dict())
 
 
+class CountDownTimer(qtc.QTimer):
+    """
+    Timer object that sends an update of remaining time at every 'interval' time, in ms.
+    When 'total_duration' is reached, the object sends a 'signal_finished' with argument 'total_duration', in s.
+    Use inherited 'start' method to start it.
+    """
+    signal_intermediate_update = qtc.Signal(float)  # return how many seconds are left
+    signal_finished = qtc.Signal(float)  # return once again the original total duration in seconds
+
+    def __init__(self, update_interval, total_duration):
+        super().__init__()
+        self.update_interval = update_interval  # in ms
+        self.total_duration = total_duration  # in s
+        self.elapsed = 0.  # in s
+        self.setInterval(update_interval)
+
+        self.timeout.connect(self.update_elapsed_time)
+        self.timeout.connect(self.signal_out_remaining_time)
+        self.timeout.connect(self.check_if_its_time_to_finish)
+    
+    def update_elapsed_time(self):
+        self.elapsed += self.update_interval / 1000
+        # this isn't accurate it seems...
+    
+    def calc_remaining_time(self):
+        return self.total_duration - self.elapsed
+
+    def signal_out_remaining_time(self):
+        self.signal_intermediate_update.emit(self.calc_remaining_time)
+    
+    def check_if_its_time_to_finish(self):
+        if self.elapsed >= self.total_duration:
+            self.signal_finished.emit(self.total_duration)
+            self.stop()
+
+
+class BasicCountDownTimer(qtc.QTimer):
+    """
+    Timer object that sends a signal when 'total_duration' is reached.
+    The object sends a 'signal_finished' with argument 'total_duration', in s.
+    Use inherited 'start' method to start it.
+    """
+    signal_finished = qtc.Signal()
+
+    def __init__(self, total_duration):
+        super().__init__()
+        self.setInterval(total_duration * 1000)
+        self.setSingleShot(True)
+
+        self.timeout.connect(self.signal_finished)
+
+
 class MainWindow(qtw.QMainWindow):
     global settings, app_definitions
 
@@ -1246,11 +1303,15 @@ class MainWindow(qtw.QMainWindow):
         gen_form_layout = qtw.QFormLayout()
         gen_form_layout.addRow("Signal type", signal_type_selector)
         gen_form_layout.addRow("Frequency", frequency_widget)
+        gen_form_layout.addRow(pwi.SunkenLine())
         for i in range(self.no_of_filters):
             gen_form_layout.addRow(f"Filter {i + 1}", filts_layout[i])
+        gen_form_layout.addRow(pwi.SunkenLine())
         gen_form_layout.addRow("Compression", compression_widget)
+        gen_form_layout.addRow(pwi.SunkenLine())
         gen_form_layout.addRow("Duration", duration_widget)
         gen_form_layout.addRow("Sample rate", sample_rate_selector)
+        gen_form_layout.addRow(pwi.SunkenLine())
 
         # 'Generate' button
         generate_button = qtw.QPushButton("Generate",
@@ -1264,7 +1325,7 @@ class MainWindow(qtw.QMainWindow):
 
         # Add the widgets, layouts
         generate_group_layout.addLayout(gen_form_layout)
-        generate_group_layout.addSpacing(10)
+        # generate_group_layout.addSpacing(10)
         generate_group_layout.addWidget(generate_button)
 
         # ---- 'Play' tab
@@ -1293,13 +1354,14 @@ class MainWindow(qtw.QMainWindow):
         play_in_loop_widget = qtw.QCheckBox(checked=True)
         play_in_loop_widget.stateChanged.connect(self.play_parameters_changed)
 
-        stop_after_widget = qtw.QSpinBox(Minimum=0,
-                                         Value=0,
-                                         ToolTip=("Stop the playback after the user defined period of time"
-                                                  " is passed. Value is in minutes. '0' means disabled."
-                                                  ),
-                                         )
-        stop_after_widget.setEnabled(False)
+        stop_after_widget = qtw.QDoubleSpinBox(Minimum=0,
+                                                Value=0,
+                                                Decimals=1,
+                                                SingleStep=30,
+                                                ToolTip=("Stop the playback after the user defined period of time"
+                                                         " is passed. Value is in minutes. '0' means disabled."
+                                                         ),
+                                                )
         stop_after_widget.valueChanged.connect(self.play_parameters_changed)
 
         # Player parameters form
@@ -1315,8 +1377,10 @@ class MainWindow(qtw.QMainWindow):
 
         for i in level_widgets.keys():
             play_params_form_layout.addRow(f"Output voltage for Ch. {i}", level_widgets[i])
+        play_params_form_layout.addRow(pwi.SunkenLine())
         play_params_form_layout.addRow("Play in loop", play_in_loop_widget)
         play_params_form_layout.addRow("Stop after (minutes)", stop_after_widget)
+        play_params_form_layout.addRow(pwi.SunkenLine())
         play_params_form_layout.addRow("Speaker nominal impedance", speaker_nominal_impedance_widget)
         play_params_form_layout.addRow("Nominal power at speaker", speaker_nominal_power_widget)
 
@@ -1341,8 +1405,9 @@ class MainWindow(qtw.QMainWindow):
 
         # Add the widgets, layouts
         play_group_layout.addWidget(player_params_widget)
+        play_group_layout.addWidget(pwi.SunkenLine())
         play_group_layout.addSpacing(10)
-        play_group_layout.addWidget(qtw.QLabel("<b>Sound Device</b>"),
+        play_group_layout.addWidget(qtw.QLabel("<b>Sound Device Information</b>"),
                                     alignment=qtc.Qt.AlignHCenter,
                                     )
         play_group_layout.addWidget(sound_device_info_widget)
@@ -1450,7 +1515,9 @@ class MainWindow(qtw.QMainWindow):
         sweep_group_layout.addLayout(other_settings_section, 2)
 
         # ---- 'Write file' tab
-        file_rms_title = qtw.QLabel("File RMS level (dBFS)\n20*log10(A) + B",
+        file_rms_title = qtw.QLabel("<b>File RMS level</b>",
+                                    alignment=qtc.Qt.AlignHCenter)
+        file_rms_description = qtw.QLabel("Exported signal RMS = 20*log10(A) + B dBFS",
                                     alignment=qtc.Qt.AlignHCenter)
         self.file_rms_multiplier_widget = qtw.QDoubleSpinBox(Minimum=0.0001,
                                                              Value=1)
@@ -1467,9 +1534,11 @@ class MainWindow(qtw.QMainWindow):
         # Write file parameters form
         write_file_form_layout = qtw.QFormLayout()
         write_file_form_layout.addWidget(file_rms_title)
+        write_file_form_layout.addWidget(file_rms_description)
         write_file_form_layout.addRow("A (multiplier)", self.file_rms_multiplier_widget)
         write_file_form_layout.addRow("B (dB)", self.file_rms_db_widget)
         write_file_form_layout.addRow("File format", self.file_format_widget)
+        write_file_form_layout.addRow(pwi.SunkenLine())
 
         # 'Write to file' button
         write_file_button = qtw.QPushButton("Save to file")
@@ -1507,7 +1576,7 @@ class MainWindow(qtw.QMainWindow):
         f"{app_definitions['description']}",
         f"Version: {app_definitions['version']}",
         "",
-        f"Copyright (C) 2023 - {app_definitions['author']}",
+        f"Copyright (C) 2024 - {app_definitions['author']}",
         f"{app_definitions['website']}",
         f"{app_definitions['email']}",
         "",
@@ -1625,7 +1694,7 @@ class MainWindow(qtw.QMainWindow):
                     "signal_object": self.generated_signal,
                     "loop": play_in_loop_widget.checkState(),
                     "requested_voltages": requested_voltages,
-                    "stop_after_min": stop_after_widget.value(),
+                    "stop_after_seconds": stop_after_widget.value() * 60,
                     }
 
                 self.player.ugs_play(stream_settings, play_kwargs)
@@ -1665,7 +1734,7 @@ class MainWindow(qtw.QMainWindow):
                           }
             if write_args["file_rms"] * self.generated_signal.CF > 1:
                 error_text = "Current settings will cause digital clipping."
-                informative_text = "Reduce target RMS voltage and/or crest factor.\nMake sure system gain is entered correctly and increase amplifier gain if necessary."
+                informative_text = "Reduce target RMS voltage and/or signal crest factor.\nMake sure system gain is entered correctly and increase amplifier gain if necessary."
                 PopupError(error_text, informative_text)
                 return
             try:
@@ -1948,7 +2017,17 @@ class MainWindow(qtw.QMainWindow):
             "User generated signal play started"
             player_params_widget.setEnabled(False)
             status_info_widget.setText(play_info_text)
-            # save_settings()
+            
+            # ---- Start stop timer
+            stop_after_min = stop_after_widget.value()
+            if stop_after_min > 0:
+                self.stop_timer = BasicCountDownTimer(stop_after_min * 60)
+                self.stop_timer.signal_finished.connect(self.player.stop_play)
+
+                self.player.play_stopped.connect(self.stop_timer.stop)
+                qtw.QApplication.instance().aboutToQuit.connect(self.stop_timer.stop)
+                self.stop_timer.start()
+
         self.player.play_started.connect(play_started)
 
         @qtc.Slot(str)
