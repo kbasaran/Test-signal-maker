@@ -62,7 +62,7 @@ home_folder = os.path.expanduser("~")
 logging.basicConfig(level=logging.DEBUG,
                     filename=os.path.join(home_folder, '.tsm.log'),
                     # encoding='utf-8',
-                    format='%(asctime)s %(levelname)s - %(funcName)s: %(message)s',
+                    format="%(asctime)s %(levelname)s - %(funcName)s: %(message)s",
                     datefmt='%Y-%m-%d %H:%M:%S',
                     )
 
@@ -1576,7 +1576,7 @@ class MainWindow(qtw.QMainWindow):
         f"{app_definitions['description']}",
         f"Version: {app_definitions['version']}",
         "",
-        f"Copyright (C) 2024 - {app_definitions['author']}",
+        f"{app_definitions['copyright']}",
         f"{app_definitions['website']}",
         f"{app_definitions['email']}",
         "",
