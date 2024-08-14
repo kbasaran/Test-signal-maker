@@ -58,7 +58,7 @@ from dataclasses import dataclass, fields
 import logging
 import multiprocessing
 
-logging.basicConfig(level=logging.DEBUG,
+logging.basicConfig(level=logging.INFO,
                     filename=Path.home().joinpath('.tsm.log'),
                     # encoding='utf-8',
                     format="%(asctime)s %(levelname)s - %(funcName)s: %(message)s",
