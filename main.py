@@ -58,9 +58,8 @@ from dataclasses import dataclass, fields
 import logging
 import multiprocessing
 
-home_folder = os.path.expanduser("~")
 logging.basicConfig(level=logging.DEBUG,
-                    filename=os.path.join(home_folder, '.tsm.log'),
+                    filename=Path.home().joinpath('.tsm.log'),
                     # encoding='utf-8',
                     format="%(asctime)s %(levelname)s - %(funcName)s: %(message)s",
                     datefmt='%Y-%m-%d %H:%M:%S',
@@ -540,7 +539,6 @@ class Player(qtc.QObject):
         self._omega_last = 0.
         self._theta_last = 0.
         self._sweep_level_last = 0.
-
 
     @qtc.Slot()
     def is_active(self):
@@ -1776,20 +1774,20 @@ class MainWindow(qtw.QMainWindow):
                         break
 
                 # add functionality for remembering latest file_folder
-                file_folder = settings.file_folder
-                if not isinstance(file_folder, str) or file_folder == "" or not os.path.exists(file_folder):
-                    file_folder = os.getcwd()
+                file_folder = Path(settings.file_folder)
+                if not file_folder.is_dir():
+                    file_folder = Path.cwd()
 
                 # ask user to pick file
                 file_formats = " ".join(["*." + str(suffix).lower() for suffix in sf.available_formats()])
-                file_path = qtw.QFileDialog.getOpenFileName(None,
+                file_raw = qtw.QFileDialog.getOpenFileName(None,
                                                             "Choose audio file to import...",
                                                             file_folder,
                                                             f"Audio files ({file_formats})",
                                                             )[0]
-                if file_path:
-                    settings.update("file_folder", os.path.dirname(file_path))
-                    self.generator.import_file(file_path)
+                if file_raw and (file := Path(file_raw)).is_file():
+                    settings.update("file_folder", file.parent)
+                    self.generator.import_file(file)
                 else:
                     self.gen_signal_not_ready.emit("No file chosen.")
                     self.generator.clear_imported_file()
