@@ -21,7 +21,7 @@ __email__ = "kbasaran@gmail.com"
 from pathlib import Path
 
 app_definitions = {"app_name": "Test Signal Maker",
-                   "version": "0.2.2",
+                   "version": "0.2.3",
                    # "version": "Test build " + today.strftime("%Y.%m.%d"),
                    "description": "Test Signal Maker - Loudspeaker test signal tool",
                    "copyright": "Copyright (C) 2024 Kerem Basaran",
@@ -57,13 +57,6 @@ import generictools.personalized_widgets as pwi
 from dataclasses import dataclass, fields
 import logging
 import multiprocessing
-
-logging.basicConfig(level=logging.DEBUG,
-                    filename=Path.home().joinpath('.tsm.log'),
-                    # encoding='utf-8',
-                    format="%(asctime)s %(levelname)s - %(funcName)s: %(message)s",
-                    datefmt='%Y-%m-%d %H:%M:%S',
-                    )
 
 
 class FileImportDialog(qtw.QDialog):
@@ -275,7 +268,7 @@ class Generator(qtc.QObject):
 
     @qtc.Slot(str)
     def import_file(self, import_file_path):
-        logging.debug(f'Importing file...{import_file_path}')
+        logger.debug(f'Importing file...{import_file_path}')
         self.busy.emit("Importing file...")
         try:
             self.imported_signal = TestSignal("Imported",
@@ -283,11 +276,11 @@ class Generator(qtc.QObject):
                                               import_channel="downmix_all",
                                               )
             self.file_import_success.emit(self.imported_signal)
-            logging.debug("Signal imported and params published.")
+            logger.debug("Signal imported and params published.")
 
         except Exception as e:
             # Pop-up
-            logging.error("Import failed" + str(e))
+            logger.error("Import failed" + str(e))
             self.exception.emit(e)
 
     @qtc.Slot()
@@ -303,25 +296,25 @@ class Generator(qtc.QObject):
             generated_signal = copy.deepcopy(self.imported_signal)
             generated_signal.reuse_existing(**kwargs)
             self.signal_ready.emit(generated_signal)
-            logging.debug("Imported signal has been processed and published.")
+            logger.debug("Imported signal has been processed and published.")
 
         except Exception as e:
             # Pop-up
-            logging.error(str(e))
+            logger.error(str(e))
             self.exception.emit(e)
 
     @qtc.Slot(str, dict)
     def generate_ugs(self, sig_type, kwargs):
-        logging.debug(f'Generate ugs "{sig_type}" initiated')
+        logger.debug(f'Generate ugs "{sig_type}" initiated')
         self.busy.emit(f"Generating {sig_type.lower()}...")
         try:
             generated_signal = TestSignal(sig_type, **kwargs)
             self.signal_ready.emit(generated_signal)
-            logging.info(f"Signal with type {sig_type} generated.")
+            logger.info(f"Signal with type {sig_type} generated.")
 
         except Exception as e:
             # Pop-up
-            logging.error(str(e))
+            logger.error(str(e))
             self.exception.emit(e)
 
 
@@ -423,7 +416,7 @@ class Player(qtc.QObject):
                                "fade_out_window": [],
                                "fade_in_window": [],
                                }
-        logging.info("Audio stream stopped.")
+        logger.info("Audio stream stopped.")
         return None
 
     def find_right_sound_device(self):
@@ -516,7 +509,7 @@ class Player(qtc.QObject):
 
         # Logging
         if new_settings:
-            logging.debug(f"New stream settings: {new_settings}")
+            logger.debug(f"New stream settings: {new_settings}")
 
         # If anything is new or there was no stream in the first place
         if new_settings:
@@ -601,8 +594,8 @@ class Player(qtc.QObject):
             mono_signal_chunk = np.empty(frames)
 
             while empty_frames > 0:
-                logging.debug("---Fill cycle---")
-                logging.debug(f"Play pos: {self.play_pos}")
+                logger.debug("---Fill cycle---")
+                logger.debug(f"Play pos: {self.play_pos}")
                 len_user_signal = len(self.user_gen_signal.time_sig)
                 remaining_in_user_signal = len_user_signal - self.play_pos
 
@@ -620,7 +613,7 @@ class Player(qtc.QObject):
                                             "stop_after": False,
                                             }
 
-                logging.debug(f"Fade out frames: {self.fade_out_frames}")
+                logger.debug(f"Fade out frames: {self.fade_out_frames}")
 
                 # reached end of fade-out and not gonna loop, so stop calling back
                 if (self.fade_out_frames["remaining"] <= empty_frames) and (not self.is_play_in_loop or self.fade_out_frames["stop_after"]):
@@ -686,7 +679,7 @@ class Player(qtc.QObject):
             for channel in range(1, self.stream.channels + 1):
                 ugs_play_rms_levels[channel - 1] = self._ugs_play_signal_rms[channel]
             if self.log_output_signal:
-                logging.debug(f"User generated signal play levels: {ugs_play_rms_levels:.4f}")
+                logger.debug(f"User generated signal play levels: {ugs_play_rms_levels:.4f}")
 
             if self.ugs_play_timer == -1.:
                 self.log_through_thread.emit(f"Started with: {self._ugs_play_voltages}Vrms")
@@ -697,7 +690,7 @@ class Player(qtc.QObject):
             return mono_signal_chunk, initial_rms, ugs_play_rms_levels, do_callback_stop
 
         except Exception as e:
-            logging.critical(
+            logger.critical(
                 f"Failed to add {frames} frames during usg callback." +
                 f"\nPosition: {self.play_pos}/{len(self.user_gen_signal.time_sig)}. Error: {str(e)}")
             raise sd.CallbackAbort  # why?
@@ -724,7 +717,7 @@ class Player(qtc.QObject):
 
             # Exponential sweep is necessary
             if target_omega > 0 and self._omega_last > 0 and (target_omega != self._omega_last):
-                logging.debug("Callback case exponential")
+                logger.debug("Callback case exponential")
                 mono_signal_chunk, self._theta_last, self._omega_last =\
                     self.calculate_exp_sweep(t_array,
                                              self._theta_last,
@@ -735,13 +728,13 @@ class Player(qtc.QObject):
 
             # Need to be quiet
             elif target_omega == 0 and self._omega_last == 0:
-                logging.debug("Callback case zero output")
+                logger.debug("Callback case zero output")
                 # Otherwise it clicks.
                 mono_signal_chunk = np.zeros(frames)
 
             # Linear sweep is necessary
             else:
-                logging.debug("Callback case linear")
+                logger.debug("Callback case linear")
                 mono_signal_chunk, self._theta_last, self._omega_last =\
                     self.calculate_lin_sweep(t_array,
                                              self._theta_last,
@@ -754,7 +747,7 @@ class Player(qtc.QObject):
                 self._bring_wave_states_to_zero(self.stream.channels)
 
             # set the signals to rms = 1 and also do the smooth crossing between voltages
-            logging.debug(f"self._sweep_level_last, self._sweep_signal_rms: {self._sweep_level_last}, {self._sweep_signal_rms}")
+            logger.debug(f"self._sweep_level_last, self._sweep_signal_rms: {self._sweep_level_last}, {self._sweep_signal_rms}")
             mono_signal_chunk = mono_signal_chunk  / np.exp2(-0.5) * make_fade_window_n(self._sweep_level_last,
                                                                                         self._sweep_signal_rms,
                                                                                         frames,
@@ -777,7 +770,7 @@ class Player(qtc.QObject):
                                                      )
                 mono_signal_chunk = mono_signal_chunk * fade_out_window
 
-                logging.debug(f"Remaining/prepared fade out frames: {self.fade_out_frames['remaining']}/{len(fade_out_window)}")
+                logger.debug(f"Remaining/prepared fade out frames: {self.fade_out_frames['remaining']}/{len(fade_out_window)}")
                 if self.log_output_signal:
                     self.output_log["fade_out_window"] = np.concatenate([self.output_log["fade_out_window"], fade_out_window])
 
@@ -794,10 +787,10 @@ class Player(qtc.QObject):
             # Make a table with correct rms signal levels
             initial_rms = 1  # rms was made 1 above
             target_rms_levels = np.zeros(self.stream.channels)
-            logging.debug(f"_sweep_channel, _sweep_signal_rms: {self._sweep_channel}, {self._sweep_signal_rms}")
+            logger.debug(f"_sweep_channel, _sweep_signal_rms: {self._sweep_channel}, {self._sweep_signal_rms}")
             target_rms_levels[self._sweep_channel - 1] = 1
             # dynamic level adjustment is handled in the fade functions (ramping). therefore here the gain is neutral.
-            logging.debug(f"Sweep levels: {target_rms_levels}")
+            logger.debug(f"Sweep levels: {target_rms_levels}")
 
             # Tell Main window which frequency you are at
             if self._sweep_signal_rms == 0 or target_omega == 0:
@@ -809,7 +802,7 @@ class Player(qtc.QObject):
             return mono_signal_chunk, initial_rms, target_rms_levels, do_callback_stop
 
         except Exception as e:
-            logging.critical(
+            logger.critical(
                 f"Failed to add {frames} frames during sweep generator callback. Error: {repr(e)}")
             raise sd.CallbackAbort
 
@@ -819,8 +812,8 @@ class Player(qtc.QObject):
         Initiated wheneversound device runs out of buffer.
         Avoid placing memory allocation or i/o tasks in here.
         """
-        logging.debug("")
-        logging.debug(f"----Callback for DAC time: {time.outputBufferDacTime}----")
+        logger.debug("")
+        logger.debug(f"----Callback for DAC time: {time.outputBufferDacTime}----")
         t1_start = pyt_time.perf_counter_ns()
 
         if status.output_underflow:
@@ -829,12 +822,12 @@ class Player(qtc.QObject):
             # Maybe switch to high latency if this occurs
         elif status and not status.priming_output:
             error_message = f"Unexpected callback status: {status}"
-            logging.warning(error_message)
+            logger.warning(error_message)
 
         # Nothing to play
         if (self.play_pos is None) and (np.isnan(self.user_req_alpha) and np.isnan(self.user_req_omega)):
             mono_signal_chunk = np.zeros(frames)          
-            logging.debug("Nothing to play for the callback. Put in zeros.")
+            logger.debug("Nothing to play for the callback. Put in zeros.")
 
         # Play a user generated signal
         elif self.play_pos is not None:
@@ -852,7 +845,7 @@ class Player(qtc.QObject):
 
         # log the output signal
         if self.log_output_signal:
-            logging.info(f"Adding to log the signal. Remaining fade frames after this: {self.fade_out_frames['remaining']}")
+            logger.info(f"Adding to log the signal. Remaining fade frames after this: {self.fade_out_frames['remaining']}")
             self.output_log["time_sig"].extend([float(i) for i in indata[:, 0]])  # only channel 1 is logged
 
             max_length = int(self.stream.samplerate * 3)
@@ -865,8 +858,8 @@ class Player(qtc.QObject):
             if len(self.output_log["fade_in_window"]) > max_length:
                 self.output_log["fade_in_window"] = self.output_log["fade_in_window"][-max_length:]
 
-            logging.debug(f"Callback current / buffer DAC time: {time.currentTime} / {time.outputBufferDacTime}")
-            logging.debug(f"Calculation / play time: {(pyt_time.perf_counter_ns() - t1_start) / 1e6:.3f} ms / {frames / self.stream.samplerate * 1000:.3f} ms")
+            logger.debug(f"Callback current / buffer DAC time: {time.currentTime} / {time.outputBufferDacTime}")
+            logger.debug(f"Calculation / play time: {(pyt_time.perf_counter_ns() - t1_start) / 1e6:.3f} ms / {frames / self.stream.samplerate * 1000:.3f} ms")
 
         # Playing needs to stop
         if do_callback_stop:
@@ -896,12 +889,12 @@ class Player(qtc.QObject):
                                    "latency": settings.stream_latency,
                                    }
                 self._initiate_stream(stream_settings)
-                logging.info("Sweep stream started.")
+                logger.info("Sweep stream started.")
                 self.stream.start()
 
         except Exception as e:
             self.signal_exception.emit(str(e))
-            logging.critical(f"Sweep generator failed. {e}")
+            logger.critical(f"Sweep generator failed. {e}")
             self.stream.close(ignore_errors=True)
 
     @qtc.Slot(dict, dict)
@@ -948,11 +941,11 @@ class Player(qtc.QObject):
 
             self.play_started.emit(status_info_text)
 
-            logging.debug(f"Stream started with block sizes {self.stream.blocksize}.")
+            logger.debug(f"Stream started with block sizes {self.stream.blocksize}.")
 
         except Exception as e:
             self.signal_exception.emit(repr(e))
-            logging.error(f"Play_once failed during start. {e}")
+            logger.error(f"Play_once failed during start. {e}")
             self.stream.close(ignore_errors=True)
 
     @qtc.Slot()
@@ -966,11 +959,11 @@ class Player(qtc.QObject):
                                         }
             else:
                 pass
-            logging.debug("Stop fadeout initiated.")
+            logger.debug("Stop fadeout initiated.")
 
         else:
             self.play_stopped.emit("Stopped.")
-            logging.debug("Stream was not active when stop was requested.")
+            logger.debug("Stream was not active when stop was requested.")
 
     @qtc.Slot(float)
     def set_ugs_play_levels(self, voltage_dict: dict) -> None:
@@ -987,7 +980,7 @@ class Player(qtc.QObject):
 
         self._ugs_play_voltages = user_req_voltages
         self._ugs_play_signal_rms = self.calculate_digital_signal_rms(user_req_voltages, self.user_gen_signal.CF)
-        logging.debug("User generated signal play levels updated in player.")
+        logger.debug("User generated signal play levels updated in player.")
 
     @qtc.Slot(float)
     def set_sweep_level(self, voltage: float) -> None:
@@ -1001,7 +994,7 @@ class Player(qtc.QObject):
             self._sweep_signal_rms = 0.
         self._sweep_signal_rms = rms_required
 
-        logging.debug("Sweep level updated in player.")
+        logger.debug("Sweep level updated in player.")
 
         # not handling exceptions within this function. risky.
 
@@ -1018,7 +1011,7 @@ class Player(qtc.QObject):
         self._sweep_channel = int(channel)
         self.set_sweep_level(self._sweep_voltage)
 
-        logging.debug("Sweep channel updated in player.")
+        logger.debug("Sweep channel updated in player.")
 
 
 class FileWriter(qtc.QThread):
@@ -1033,7 +1026,7 @@ class FileWriter(qtc.QThread):
 
     def run(self):
         self.file_write_busy.emit("Choose file name...")
-        logging.debug(f"Writer thread started with params: {self.generated_signal.analysis}, {self.kwargs}")
+        logger.debug(f"Writer thread started with params: {self.generated_signal.analysis}, {self.kwargs}")
         channels = self.generated_signal.channel_count()
 
         try:
@@ -1064,7 +1057,7 @@ class FileWriter(qtc.QThread):
                 sound_file.flush()
                 self.file_write_successful.emit("Write successful.\n\n" +
                                                 file_info + "\n\n\nStopped file writer.")
-                logging.info(f"File '{self.kwargs['file_name']}' write successful.")
+                logger.info(f"File '{self.kwargs['file_name']}' write successful.")
         except Exception as e:
             self.file_write_fail.emit("Error during file write: " + str(e))
             raise e
@@ -1078,7 +1071,7 @@ class PlayerLogger(qtc.QThread):
 
     @qtc.Slot()
     def log(self, message):
-        logging.info(message)
+        logger.info(message)
 
 
 @dataclass
@@ -1106,7 +1099,7 @@ class Settings:
         if not new_val:
             return
         elif type(getattr(self, attr_name)) != type(new_val):
-            logging.warning(f"Settings.update: Received value type {type(new_val)} does not match the original type {type(getattr(self, attr_name))}"
+            logger.warning(f"Settings.update: Received value type {type(new_val)} does not match the original type {type(getattr(self, attr_name))}"
                             f"\nValue: {new_val}")
 
         setattr(self, attr_name, new_val)
@@ -1718,7 +1711,7 @@ class MainWindow(qtw.QMainWindow):
                     self.generator.generate_ugs(sig_type, kwargs)
             except Exception as e:
                 error_text = "Unable to place generator request in the generator thread."
-                logging.critical(str(e))
+                logger.critical(str(e))
                 PopupError(error_text, str(e))
 
         def write_file_clicked():
@@ -1752,7 +1745,7 @@ class MainWindow(qtw.QMainWindow):
                 writer.file_write_successful.connect(write_file_info_widget.setText)
                 writer.file_write_busy.connect(write_file_info_widget.setText)
                 writer.file_write_fail.connect(write_file_info_widget.setText)
-                writer.finished.connect(lambda: logging.debug("Finished thread file writer"))
+                writer.finished.connect(lambda: logger.debug("Finished thread file writer"))
                 writer.start()
             except Exception as e:
                 error_text = "File writer failed."
@@ -1813,7 +1806,7 @@ class MainWindow(qtw.QMainWindow):
 
             except Exception as e:
                 error_text = "Unable to place sweep generate request in the player thread."
-                logging.critical(repr(e))
+                logger.critical(repr(e))
                 PopupError(error_text, repr(e))
 
         # User changed generator signal type
@@ -1945,7 +1938,7 @@ class MainWindow(qtw.QMainWindow):
         # ---- Slots of main window GUI
         @qtc.Slot(TestSignal)
         def gen_signal_ready(generated_signal):
-            logging.debug("Main window received signal 'Generated signal ready'")
+            logger.debug("Main window received signal 'Generated signal ready'")
             try:
                 self.generated_signal = generated_signal
 
@@ -2048,7 +2041,7 @@ class MainWindow(qtw.QMainWindow):
         def sys_parameters_changed_actions():
             "System parameters changed"
             self.player.stop_play()
-            logging.warning("System parameters changed by user.")
+            logger.warning("System parameters changed by user.")
             sweep_channel.setMaximum(int(settings.channel_count))
             disable_voltage_output_widgets_for_inactive_channels()
             self.player.set_sweep_level(voltage_spin_box.value())  # due to a bug where the levels are not updated
@@ -2103,12 +2096,54 @@ class MatplotlibWidget(qtw.QWidget):
         self.update_plot(None)
 
 
+def parse_args(app_definitions):
+    import argparse
+
+    description = (
+        f"{app_definitions['app_name']} - {app_definitions['copyright']}"
+        "\nThis program comes with ABSOLUTELY NO WARRANTY"
+        "\nThis is free software, and you are welcome to redistribute it"
+        "\nunder certain conditions. See LICENSE file for more details."
+    )
+
+    parser = argparse.ArgumentParser(prog="python main.py",
+                                     description=description,
+                                     epilog={app_definitions['website']},
+                                     )
+
+    parser.add_argument('-d', '--debuglevel', nargs="?",
+                        choices=["debug", "info", "warning", "error", "critical"],
+                        help="Set debugging level for Python logging. Valid values are debug, info, warning, error and critical.")
+
+    return parser.parse_args()
+
+
+def setup_logging(args):
+    if args.debuglevel:
+        log_level = getattr(logging, args.debuglevel.upper())
+    else:
+        log_level = logging.INFO
+
+    log_filename = Path.home().joinpath(f".{app_definitions['app_name'].lower()}.log")
+    logging.basicConfig(filename=log_filename,
+                        level=log_level,
+                        force=True,
+                        )
+    # had to force this
+    # https://stackoverflow.com/questions/30861524/logging-basicconfig-not-creating-log-file-when-i-run-in-pycharm
+    logger = logging.getLogger()
+    logger.info(f"Starting with log level {log_level}.")
+
+    return logger
+
 def main():
-    global settings, app_definition
+    global settings, app_definition, logger
     if os.name == "nt":
         # bug: https://stackoverflow.com/questions/22644805/cx-freeze-creates-multiple-instances-of-program
         multiprocessing.freeze_support()
-    logging.info("Starting application")
+
+    args = parse_args(app_definitions)
+    logger = setup_logging(args)
     settings = Settings(app_definitions["app_name"])
 
     qapp = qtw.QApplication.instance()
