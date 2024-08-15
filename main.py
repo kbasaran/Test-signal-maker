@@ -1654,7 +1654,7 @@ class MainWindow(qtw.QMainWindow):
         self.player_thread = qtc.QThread()
         self.player = Player()
         self.player.moveToThread(self.player_thread)
-        self.player_thread.start(qtc.QThread.HighPriority)
+        self.player_thread.start(qtc.QThread.TimeCriticalPriority)
 
         qtw.QApplication.instance().aboutToQuit.connect(self.player.stop_play)
         qtw.QApplication.instance().aboutToQuit.connect(self.player_thread.quit)
