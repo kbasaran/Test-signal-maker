@@ -384,7 +384,7 @@ class Player(qtc.QObject):
                            "fade_out_window": np.array([]),
                            "fade_in_window": [],
                            }
-        self.log_output_signal = False  # only logs channel 1 currently
+        self.log_output_signal = False  # logs channel 1 when True
 
         # define the sound device based on settings and availability
         self.find_right_sound_device()
@@ -814,7 +814,8 @@ class Player(qtc.QObject):
         """
         logger.debug("")
         logger.debug(f"----Callback for DAC time: {time.outputBufferDacTime}----")
-        t1_start = pyt_time.perf_counter_ns()
+        if logger.level < 20:  # 20 is info, 10 is debug
+            t1_start = pyt_time.perf_counter_ns()
 
         if status.output_underflow:
             self.log_through_thread.emit("Buffer underflow. Consider increasing latency settings.")
@@ -859,7 +860,8 @@ class Player(qtc.QObject):
                 self.output_log["fade_in_window"] = self.output_log["fade_in_window"][-max_length:]
 
             logger.debug(f"Callback current / buffer DAC time: {time.currentTime} / {time.outputBufferDacTime}")
-            logger.debug(f"Calculation / play time: {(pyt_time.perf_counter_ns() - t1_start) / 1e6:.3f} ms / {frames / self.stream.samplerate * 1000:.3f} ms")
+            if logger.level < 20:  # 20 is info, 10 is debug
+                logger.debug(f"Calculation / play time: {(pyt_time.perf_counter_ns() - t1_start) / 1e6:.3f} ms / {frames / self.stream.samplerate * 1000:.3f} ms")
 
         # Playing needs to stop
         if do_callback_stop:
