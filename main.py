@@ -1181,7 +1181,7 @@ class BasicCountDownTimer(qtc.QTimer):
     """
     signal_finished = qtc.Signal()
 
-    def __init__(self, total_duration):
+    def __init__(self, total_duration: (int, float)):
         super().__init__()
         self.setInterval(total_duration * 1000)
         self.setSingleShot(True)
