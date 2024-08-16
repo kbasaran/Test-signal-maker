@@ -1,5 +1,4 @@
 handling exceptions from player and other threads - set a consistent strategy
-player timeout and distortion on sound cards with very low latency
 resampling function would have been good
 timer has a bug. maybe add countdown timer also into callback?
 when stopping with timer better to give status message "stopped with timer"
