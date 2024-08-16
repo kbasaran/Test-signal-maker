@@ -2145,9 +2145,6 @@ def setup_logging(args):
 
 def main():
     global settings, app_definition, logger
-    if os.name == "nt":
-        # bug: https://stackoverflow.com/questions/22644805/cx-freeze-creates-multiple-instances-of-program
-        multiprocessing.freeze_support()
 
     args = parse_args(app_definitions)
     logger = setup_logging(args)
@@ -2163,4 +2160,7 @@ def main():
 
 
 if __name__ == "__main__":
+    if os.name == "nt":
+        # bug: https://stackoverflow.com/questions/22644805/cx-freeze-creates-multiple-instances-of-program
+        multiprocessing.freeze_support()
     main()
