@@ -2138,6 +2138,7 @@ def setup_logging(args):
 
     return logger
 
+
 def main():
     global settings, app_definition, logger
     if os.name == "nt":
