@@ -1291,6 +1291,10 @@ class MainWindow(qtw.QMainWindow):
         for i in range(self.no_of_filters):
             filter = Filter(parent=self)
             filts_layout[i], filts_widgets[i] = filter.layout, filter.widgets
+        
+        # add a basic HP filter to avoid DC offset
+        filts_widgets[0]["type"].setCurrentText("HP")
+        filts_widgets[0]["frequency"].setValue(1)
 
         # Generator parameters form
         gen_form_layout = qtw.QFormLayout()
