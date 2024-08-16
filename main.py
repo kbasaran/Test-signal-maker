@@ -404,7 +404,12 @@ class Player(qtc.QObject):
         self.reset_fade_out()
         self.user_req_omega, self.user_req_alpha = np.nan, np.nan
         self.sweep_generator_stopped.emit("Stopped")
-        self.play_stopped.emit("Stopped.")
+
+        if self.stop_after_seconds:
+            self.play_stopped.emit(f"Stopped after {self.stop_after_seconds/60:.1f} minutes.")
+        else:
+            self.play_stopped.emit("Stopped.")
+
         self._theta_last = np.nan
         self._omega_last = np.nan
         self._bring_wave_states_to_zero(self.stream.channels)
@@ -915,6 +920,7 @@ class Player(qtc.QObject):
             self.set_ugs_play_levels(play_kwargs["requested_voltages"])
 
             self.is_play_in_loop = play_kwargs["loop"]
+            self.stop_after_seconds = play_kwargs["stop_after_seconds"]
             self.play_pos = 0
 
             status_info_text = "---- Playing ----" if not play_kwargs["loop"] else "---- Playing in loop ----"
@@ -938,6 +944,14 @@ class Player(qtc.QObject):
                     status_info_text += (
                         f"\n\nChannel {cn}:\nMuted."
                     )
+                    
+            # ---- Stop timer
+            if self.stop_after_seconds > 0:
+                self.stop_timer = BasicCountDownTimer(self.stop_after_seconds)
+                self.stop_timer.signal_finished.connect(self.stop_play)
+                self.play_stopped.connect(self.stop_timer.stop)
+                qtw.QApplication.instance().aboutToQuit.connect(self.stop_timer.stop)
+                self.stop_timer.start()
 
             self.stream.start()
 
@@ -950,9 +964,8 @@ class Player(qtc.QObject):
             logger.error(f"Play_once failed during start. {e}")
             self.stream.close(ignore_errors=True)
 
-    @qtc.Slot()
+    @qtc.Slot(str)
     def stop_play(self):
-        # This is a blocking function due to the while loop below
         if hasattr(self, "stream") and self.stream.active:
             if np.isnan(self.fade_out_frames["remaining"]):
                 self.fade_out_frames = {"remaining": self.fade_window_size,
@@ -964,7 +977,6 @@ class Player(qtc.QObject):
             logger.debug("Stop fadeout initiated.")
 
         else:
-            self.play_stopped.emit("Stopped.")
             logger.debug("Stream was not active when stop was requested.")
 
     @qtc.Slot(float)
@@ -2014,16 +2026,6 @@ class MainWindow(qtw.QMainWindow):
             "User generated signal play started"
             player_params_widget.setEnabled(False)
             status_info_widget.setText(play_info_text)
-            
-            # ---- Start stop timer
-            stop_after_min = stop_after_widget.value()
-            if stop_after_min > 0:
-                self.stop_timer = BasicCountDownTimer(stop_after_min * 60)
-                self.stop_timer.signal_finished.connect(self.player.stop_play)
-
-                self.player.play_stopped.connect(self.stop_timer.stop)
-                qtw.QApplication.instance().aboutToQuit.connect(self.stop_timer.stop)
-                self.stop_timer.start()
 
         self.player.play_started.connect(play_started)
 
