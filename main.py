@@ -422,7 +422,6 @@ class Player(qtc.QObject):
                                "fade_in_window": [],
                                }
         logger.info("Audio stream stopped.")
-        return None
 
     def find_right_sound_device(self):
         preferred_device_name = settings.preferred_device
@@ -443,7 +442,7 @@ class Player(qtc.QObject):
             # this is invoked regularly to update the current sound device in use
             # without this, when default device is changed in operating system, there is no detection
             # https://github.com/spatialaudio/python-sounddevice/issues/337
-            # if hasattr(self, "stream") and not self.stream.active:  # if stream is not active
+            # if not self.stream.active:  # if stream is not active
                 # sd._terminate()
                 # sd._initialize()
             self.find_right_sound_device()
@@ -456,8 +455,7 @@ class Player(qtc.QObject):
 --Default samplerate: {int(play_device_info['default_samplerate'])}
 --Default data type: {sd.default.dtype[1]}
 """
-            if hasattr(self, "stream"):
-                play_device_summary += f"--Reported latency: {self.stream.latency * 1000:.3g}ms"
+            play_device_summary += f"--Reported latency: {self.stream.latency * 1000:.3g}ms"
 
         except Exception as e:
             play_device_summary = f"Exception while detecting sound devices.\n{e}"
@@ -537,10 +535,6 @@ class Player(qtc.QObject):
         self._omega_last = 0.
         self._theta_last = 0.
         self._sweep_level_last = 0.
-
-    @qtc.Slot()
-    def is_active(self):
-        return hasattr(self, "stream") and self.stream.active
 
     def calculate_quiet(self, t_array, theta_start, omega_start, omega_end):
         """
@@ -890,7 +884,7 @@ class Player(qtc.QObject):
             # the voltage is being set separetely with a signal and slot "set_sweep_level"
 
             # If there is no sweep stream ongoing currently
-            if (not hasattr(self, "stream")) or (not self.stream.active) or self.play_pos:
+            if not self.stream.active or self.play_pos:
                 stream_settings = {"samplerate": settings.sweep_sample_rate,
                                    "channels": settings.channel_count,
                                    "latency": settings.stream_latency,
@@ -908,11 +902,10 @@ class Player(qtc.QObject):
     def ugs_play(self, stream_settings, play_kwargs):
         "UGS means 'user generated signal'"
         try:
-            if hasattr(self, "stream"):
-                # Already doing a usg play
-                self.stop_play()
-                while self.stream.active:
-                    pass
+            # Make sure stream is stopped first
+            self.stop_play()
+            while self.stream.active:
+                pass
 
             self._initiate_stream(stream_settings)
 
@@ -966,7 +959,7 @@ class Player(qtc.QObject):
 
     @qtc.Slot(str)
     def stop_play(self):
-        if hasattr(self, "stream") and self.stream.active:
+        if self.stream.active:
             if np.isnan(self.fade_out_frames["remaining"]):
                 self.fade_out_frames = {"remaining": self.fade_window_size,
                                         "total": self.fade_window_size,
@@ -1017,7 +1010,7 @@ class Player(qtc.QObject):
         """Sets channel for sweep as an integer value.
         The integer is user friendly, starting from 1.
         """
-        if hasattr(self, "stream") and self.stream.active:
+        if self.stream.active:
             self.stop_play()  # for user safety
             while self.stream.active:
                 pass  # wait until play ends
@@ -1776,7 +1769,7 @@ class MainWindow(qtw.QMainWindow):
                 # Wait if playback is going on. This call does file access and can cause
                 # buffer underrun in player callback
                 for timer in range(10):
-                    if self.player.is_active:
+                    if self.player.stream.active:
                         qtc.QThread.msleep(100)
                     if timer == 99:
                         raise RuntimeError("Could not stop player thread.")
