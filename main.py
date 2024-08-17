@@ -34,7 +34,7 @@ app_definitions = {"app_name": "Test Signal Maker",
 
 import sys
 import os
-import time as pyt_time
+import time
 
 # https://doc.qt.io/qtforpython/
 from PySide6 import QtWidgets as qtw
@@ -173,18 +173,18 @@ class SysGainAndLevelsPopup(qtw.QDialog):
                                                         )
 
         # Sweep sample rate
-        sweep_sample_rate = qtw.QComboBox()
+        play_sample_rate = qtw.QComboBox()
         for val in [44100, 48000, 96000]:
-            sweep_sample_rate.addItem(str(val), val)
+            play_sample_rate.addItem(str(val), val)
 
         # check which value is stored in settings
-        current_val = settings.sweep_sample_rate
-        current_val_idx = sweep_sample_rate.findData(current_val)
+        current_val = settings.play_sample_rate
+        current_val_idx = play_sample_rate.findData(current_val)
 
         if current_val_idx == -1:  # if the sapmle rate is not available in current list
-            sweep_sample_rate.setCurrentIndex(1)
+            play_sample_rate.setCurrentIndex(1)
         else:
-            sweep_sample_rate.setCurrentIndex(current_val_idx)
+            play_sample_rate.setCurrentIndex(current_val_idx)
 
         # Stream latency
         stream_latency = qtw.QComboBox()
@@ -206,7 +206,7 @@ class SysGainAndLevelsPopup(qtw.QDialog):
         sys_gain_form_layout.addRow("Amplifier peak capability (V)", amp_peak_capability_widget)
 
         sys_gain_form_layout.addWidget(qtw.QFrame(FrameShape=qtw.QFrame.HLine, FrameShadow=qtw.QFrame.Sunken))
-        sys_gain_form_layout.addRow("Sweep sample rate", sweep_sample_rate)
+        sys_gain_form_layout.addRow("Play sample rate", play_sample_rate)
         sys_gain_form_layout.addRow("Stream latency", stream_latency)
 
         # Pushbutton
@@ -238,11 +238,13 @@ class SysGainAndLevelsPopup(qtw.QDialog):
             settings.update("amp_peak", amp_peak_capability_widget.value())
             settings.update("channel_count", number_of_channels_widget.value())
             settings.update("max_channel_count", settings.max_channel_count)  # so this stays fixed, no user option to change it yet
-            settings.update("sweep_sample_rate", sweep_sample_rate.currentData())
+            settings.update("play_sample_rate", play_sample_rate.currentData())
             settings.update("stream_latency", stream_latency.currentData())
 
             self.user_changed_sys_params_signal.emit()
             self.done(0)
+            logger.info("System parameters changed by user.")
+
         save_sys_gain_settings.clicked.connect(save_and_close)
         
         def update_max_channel_count(device_index):
@@ -385,6 +387,7 @@ class Player(qtc.QObject):
                            "fade_in_window": [],
                            }
         self.log_output_signal = False  # logs channel 1 when True
+        self.fade_window_size = int(self.stream.samplerate // 20)
 
         # define the sound device based on settings and availability
         self.find_right_sound_device()
@@ -392,6 +395,28 @@ class Player(qtc.QObject):
         # Inititate attributes
         self._sweep_voltage = 0
         self._sweep_channel = 0
+        
+        self._initiate_stream()
+
+    def _initiate_stream(self):
+        """Prepare the stream object with provided settings"""
+
+        # Close any existing stream
+        if hasattr(self, "stream"):
+            self.stop_play_blocking()
+            self.stream.close()
+
+        self._bring_sweep_states_to_zero(settings.channel_count)
+
+        self.stream = sd.OutputStream(callback=self.callback,
+                                      device=self.play_device_idx,
+                                      finished_callback=self.announce_callback_is_finished,
+                                      samplerate=settings.play_sample_rate,
+                                      channels=settings.channel_count,
+                                      latency=settings.stream_latency,
+                                      )
+
+        self.ugs_play_stopwatch = -1.
 
     def reset_fade_out(self):
         self.fade_out_frames = {"remaining": np.nan,
@@ -400,21 +425,19 @@ class Player(qtc.QObject):
                                 }
 
     def announce_callback_is_finished(self):
-        self.play_pos = None
-        self.reset_fade_out()
+        
+        if self.play_pos:
+            if self.stop_after_seconds:
+                self.play_stopped.emit(f"Stopped with timer after {self.stop_after_seconds/60:.1f} minutes.")
+            else:
+                self.play_stopped.emit("Stopped.")
+            self.play_pos = None
+            self.reset_fade_out()
+
         self.user_req_omega, self.user_req_alpha = np.nan, np.nan
         self.sweep_generator_stopped.emit("Stopped")
-
-        if self.stop_after_seconds:
-            self.play_stopped.emit(f"Stopped after {self.stop_after_seconds/60:.1f} minutes.")
-        else:
-            self.play_stopped.emit("Stopped.")
-
-        self._theta_last = np.nan
-        self._omega_last = np.nan
-        self._bring_wave_states_to_zero(self.stream.channels)
+        self._bring_sweep_states_to_zero(self.stream.channels)
         self.sweep_generated.emit(np.nan, np.nan)
-        self.fade_out_frames = {"remaining": np.nan, "total": np.nan}
         if self.log_output_signal:
             self.publish_log.emit(self.output_log)
             self.output_log = {"time_sig": [],
@@ -456,7 +479,7 @@ class Player(qtc.QObject):
 --Default data type: {sd.default.dtype[1]}
 """
             play_device_summary += f"--Reported latency: {self.stream.latency * 1000:.3g}ms"
-
+            
         except Exception as e:
             play_device_summary = f"Exception while detecting sound devices.\n{e}"
 
@@ -499,39 +522,7 @@ class Player(qtc.QObject):
         else:
             return rms_for_digital_signals
 
-    def _initiate_stream(self, stream_settings):
-        """Prepare the stream object with provided settings"""
-        self.stop_play()
-
-        # Check if anything is new - (doesn't work properly due to .latency receiving str but returning float)
-        new_settings = {}
-        running_stream = None if not hasattr(self, "stream") else self.stream
-        for setting, value in stream_settings.items():
-            if getattr(running_stream, setting, None) != value:  # this returns None if there is no such key
-                new_settings.update({setting: value})
-
-        # Logging
-        if new_settings:
-            logger.debug(f"New stream settings: {new_settings}")
-
-        # If anything is new or there was no stream in the first place
-        if new_settings:
-            if hasattr(self, "stream"):
-                while self.stream.active: # maybe it is still doing callbacks, so wait a bit
-                    pass
-                self.stream.close()
-
-            self._bring_wave_states_to_zero(stream_settings["channels"])
-
-            self.stream = sd.OutputStream(callback=self.callback,
-                                          device=self.play_device_idx,
-                                          finished_callback=self.announce_callback_is_finished,
-                                          **stream_settings,
-                                          )
-            self.fade_window_size = int(self.stream.samplerate // 10)
-            self.ugs_play_timer = -1.
-
-    def _bring_wave_states_to_zero(self, channel_count):
+    def _bring_sweep_states_to_zero(self, channel_count):
         self._omega_last = 0.
         self._theta_last = 0.
         self._sweep_level_last = 0.
@@ -680,12 +671,12 @@ class Player(qtc.QObject):
             if self.log_output_signal:
                 logger.debug(f"User generated signal play levels: {ugs_play_rms_levels:.4f}")
 
-            if self.ugs_play_timer == -1.:
+            if self.ugs_play_stopwatch == -1.:
                 self.log_through_thread.emit(f"Started with: {self._ugs_play_voltages}Vrms")
-            self.ugs_play_timer = pyt_time.time()
-            if pyt_time.time() > self.ugs_play_timer + 60 * 60:  # every hour
+            self.ugs_play_stopwatch = time.time()
+            if time.time() > self.ugs_play_stopwatch + 60 * 60:  # every hour
                 self.log_through_thread.emit(f"Ongoing with: {self._ugs_play_voltages}Vrms")
-                self.ugs_play_timer = pyt_time.time()
+                self.ugs_play_stopwatch = time.time()
             return mono_signal_chunk, initial_rms, ugs_play_rms_levels, do_callback_stop
 
         except Exception as e:
@@ -743,7 +734,7 @@ class Player(qtc.QObject):
 
             # There was a omega=0 case. Reset the theta and omega values.
             if target_omega == 0:
-                self._bring_wave_states_to_zero(self.stream.channels)
+                self._bring_sweep_states_to_zero(self.stream.channels)
 
             # set the signals to rms = 1 and also do the smooth crossing between voltages
             logger.debug(f"self._sweep_level_last, self._sweep_signal_rms: {self._sweep_level_last}, {self._sweep_signal_rms}")
@@ -805,16 +796,16 @@ class Player(qtc.QObject):
                 f"Failed to add {frames} frames during sweep generator callback. Error: {repr(e)}")
             raise sd.CallbackAbort
 
-    def callback(self, indata, frames, time, status):
+    def callback(self, indata, frames, ctime, status):
         """
         Callback function for sounddevice player.
         Initiated wheneversound device runs out of buffer.
         Avoid placing memory allocation or i/o tasks in here.
         """
         logger.debug("")
-        logger.debug(f"----Callback for DAC time: {time.outputBufferDacTime}----")
+        logger.debug(f"----Callback for DAC time: {ctime.outputBufferDacTime}----")
         if logger.level < 20:  # 20 is info, 10 is debug
-            t1_start = pyt_time.perf_counter_ns()
+            t1_start = time.perf_counter_ns()
 
         if status.output_underflow:
             self.log_through_thread.emit("Buffer underflow. Consider increasing latency settings.")
@@ -858,16 +849,16 @@ class Player(qtc.QObject):
             if len(self.output_log["fade_in_window"]) > max_length:
                 self.output_log["fade_in_window"] = self.output_log["fade_in_window"][-max_length:]
 
-            logger.debug(f"Callback current / buffer DAC time: {time.currentTime} / {time.outputBufferDacTime}")
+            logger.debug(f"Callback current / buffer DAC time: {ctime.currentTime} / {ctime.outputBufferDacTime}")
             if logger.level < 20:  # 20 is info, 10 is debug
-                logger.debug(f"Calculation / play time: {(pyt_time.perf_counter_ns() - t1_start) / 1e6:.3f} ms / {frames / self.stream.samplerate * 1000:.3f} ms")
+                logger.debug(f"Calculation / play time: {(time.perf_counter_ns() - t1_start) / 1e6:.3f} ms / {frames / self.stream.samplerate * 1000:.3f} ms")
 
         # Playing needs to stop
         if do_callback_stop:
-            raise sd.CallbackStop
+            raise sd.CallbackStop()
 
     @qtc.Slot(dict)
-    def generate_sweep(self, **kwargs):
+    def sweep_play(self, **kwargs):
         try:
             target_omega = kwargs.get("target_freq", np.nan) * 2 * np.pi
             alpha = kwargs.get("alpha", np.nan)
@@ -882,16 +873,12 @@ class Player(qtc.QObject):
             self.user_req_omega, self.user_req_alpha = target_omega, alpha
 
             # the voltage is being set separetely with a signal and slot "set_sweep_level"
-
-            # If there is no sweep stream ongoing currently
+            
+            # If no active stream or a ugs stream ongoing
             if not self.stream.active or self.play_pos:
-                stream_settings = {"samplerate": settings.sweep_sample_rate,
-                                   "channels": settings.channel_count,
-                                   "latency": settings.stream_latency,
-                                   }
-                self._initiate_stream(stream_settings)
-                logger.info("Sweep stream started.")
+                self._initiate_stream()
                 self.stream.start()
+                logger.info("Sweep stream started.")
 
         except Exception as e:
             self.signal_exception.emit(str(e))
@@ -899,15 +886,11 @@ class Player(qtc.QObject):
             self.stream.close(ignore_errors=True)
 
     @qtc.Slot(dict, dict)
-    def ugs_play(self, stream_settings, play_kwargs):
+    def ugs_play(self, play_kwargs):
         "UGS means 'user generated signal'"
         try:
             # Make sure stream is stopped first
-            self.stop_play()
-            while self.stream.active:
-                pass
-
-            self._initiate_stream(stream_settings)
+            self.stop_play_blocking()
 
             self.user_gen_signal = play_kwargs["signal_object"]
             self.set_ugs_play_levels(play_kwargs["requested_voltages"])
@@ -917,14 +900,14 @@ class Player(qtc.QObject):
             self.play_pos = 0
 
             status_info_text = "---- Playing ----" if not play_kwargs["loop"] else "---- Playing in loop ----"
-            now = pyt_time.time()
+            now = time.time()
             status_info_text += f"\nLocal time at start: {datetime.fromtimestamp(now).strftime('%B %d, %H:%M:%S')}"
             stop_after_seconds = play_kwargs.get("stop_after_seconds", 0)
             if stop_after_seconds > 0:
                 stop_time = now + play_kwargs["stop_after_seconds"]
                 status_info_text += f"\nLocal time to stop: {datetime.fromtimestamp(stop_time).strftime('%B %d, %H:%M:%S')}"
 
-            for cn in range(1, stream_settings["channels"] + 1):
+            for cn in range(1, self.stream.channels + 1):
                 channel_rms = self._ugs_play_voltages[cn]
                 if channel_rms > 0:
                     status_info_text += (
@@ -946,8 +929,8 @@ class Player(qtc.QObject):
                 qtw.QApplication.instance().aboutToQuit.connect(self.stop_timer.stop)
                 self.stop_timer.start()
 
+            self._initiate_stream()
             self.stream.start()
-
             self.play_started.emit(status_info_text)
 
             logger.debug(f"Stream started with block sizes {self.stream.blocksize}.")
@@ -971,6 +954,12 @@ class Player(qtc.QObject):
 
         else:
             logger.debug("Stream was not active when stop was requested.")
+    
+    def stop_play_blocking(self):
+        self.stop_play()
+        # Block until
+        while self.stream.active:
+            pass
 
     @qtc.Slot(float)
     def set_ugs_play_levels(self, voltage_dict: dict) -> None:
@@ -1008,12 +997,10 @@ class Player(qtc.QObject):
     @qtc.Slot(int)
     def set_sweep_channel(self, channel):
         """Sets channel for sweep as an integer value.
-        The integer is user friendly, starting from 1.
+        The integer for channel is user friendly, starting from 1.
         """
         if self.stream.active:
-            self.stop_play()  # for user safety
-            while self.stream.active:
-                pass  # wait until play ends
+            self.stop_play_blocking()  # for user hearing safety
 
         self._sweep_channel = int(channel)
         self.set_sweep_level(self._sweep_voltage)
@@ -1092,7 +1079,7 @@ class Settings:
     amp_peak: float = 99.
     max_channel_count: int = 10
     channel_count: int = 2
-    sweep_sample_rate: int = 44100
+    play_sample_rate: int = 48000
     stream_latency: str = "high"
     file_folder: str = ""
 
@@ -1252,9 +1239,16 @@ class MainWindow(qtw.QMainWindow):
         duration_widget.valueChanged.connect(self.gen_parameters_changed)
 
         sample_rate_selector = qtw.QComboBox()
-        for i in [22050, 44100, 48000, 96000]:
+
+        sample_rate_list = [22050, 44100, 48000, 96000]
+        for i in sample_rate_list:
             sample_rate_selector.addItem(str(i), i)
-        sample_rate_selector.setCurrentIndex(2)
+            
+        try:
+            sample_rate_selector.setCurrentIndex(sample_rate_list.index(settings.play_sample_rate))
+        except ValueError:
+            sample_rate_selector.setCurrentIndex(1)
+
         sample_rate_selector.currentTextChanged.connect(self.gen_parameters_changed)
 
         # Filters
@@ -1651,24 +1645,32 @@ class MainWindow(qtw.QMainWindow):
         mw_center_layout.addWidget(mw_center_separator)
         mw_center_layout.addWidget(mw_right_widget)
 
-        # ---- Start generator and player threads
-        self.generator = Generator()
-        self.generator_thread = qtc.QThread()
-        self.generator.moveToThread(self.generator_thread)
-        self.generator_thread.start(qtc.QThread.LowPriority)
+        # ---- Start player and generator
 
-        self.player_logger = PlayerLogger()
-        self.player_logger.start(qtc.QThread.LowestPriority)
+        def start_player_thread():
+            self.player_logger = PlayerLogger()
+            self.player_logger.start(qtc.QThread.LowestPriority)
+            
+            qtw.QApplication.instance().aboutToQuit.connect(self.player_logger.quit)
 
-        self.player_thread = qtc.QThread()
-        self.player = Player()
-        self.player.moveToThread(self.player_thread)
-        self.player_thread.start(qtc.QThread.TimeCriticalPriority)
+            self.player_thread = qtc.QThread()
+            self.player = Player()
+            self.player.moveToThread(self.player_thread)
+            self.player_thread.start(qtc.QThread.TimeCriticalPriority)
 
-        qtw.QApplication.instance().aboutToQuit.connect(self.player.stop_play)
-        qtw.QApplication.instance().aboutToQuit.connect(self.player_thread.quit)
-        qtw.QApplication.instance().aboutToQuit.connect(self.generator_thread.quit)
-        qtw.QApplication.instance().aboutToQuit.connect(self.player_logger.quit)
+            qtw.QApplication.instance().aboutToQuit.connect(self.player.stop_play)
+            qtw.QApplication.instance().aboutToQuit.connect(self.player_thread.quit)
+
+        def start_generator_thread():
+            self.generator = Generator()
+            self.generator_thread = qtc.QThread()
+            self.generator.moveToThread(self.generator_thread)
+            self.generator_thread.start(qtc.QThread.LowPriority)
+
+            qtw.QApplication.instance().aboutToQuit.connect(self.generator_thread.quit)
+        
+        start_generator_thread()
+        start_player_thread()
 
         # ---- Functions triggered by user through the GUI
         def gain_and_levels_button_clicked():
@@ -1679,18 +1681,16 @@ class MainWindow(qtw.QMainWindow):
             sys_gain_widget.exec()
 
         def play_clicked():
-            if hasattr(self, "generated_signal") and isinstance(self.generated_signal, TestSignal):
-                # Params to initiate string
-                channel_count = settings.channel_count
-                channels_range = range(1, channel_count + 1)
+            if not hasattr(self, "generated_signal") or not isinstance(self.generated_signal, TestSignal):
+                error_text = "No signal found to play."
+                informative_text = "Generate a signal using the generator tab."
+                PopupError(error_text, informative_text)
+                return
 
-                stream_settings = {"samplerate": sample_rate_selector.currentData(),
-                                   "channels": channel_count,
-                                   "latency": settings.stream_latency,
-                                   }
-
+            else:
                 # Params to play signal
-                requested_voltages = {n_c: level_widgets[n_c].value() for n_c in channels_range}
+                requested_voltages = \
+                    {n_c: level_widgets[n_c].value() for n_c in range(1, settings.channel_count + 1)}
 
                 play_kwargs = {
                     "signal_object": self.generated_signal,
@@ -1699,12 +1699,7 @@ class MainWindow(qtw.QMainWindow):
                     "stop_after_seconds": stop_after_widget.value() * 60,
                     }
 
-                self.player.ugs_play(stream_settings, play_kwargs)
-
-            else:
-                error_text = "No signal found to play."
-                informative_text = "Generate a signal using the generator tab."
-                PopupError(error_text, informative_text)
+                self.player.ugs_play(play_kwargs)
 
         def generate_clicked():
             try:
@@ -1741,7 +1736,7 @@ class MainWindow(qtw.QMainWindow):
                 return
             try:
                 self.player.stop_play()
-                # pyt_time.sleep(0.001)
+                # time.sleep(0.001)
                 file_filters = {"FLAC": "FLAC files (*.flac)",
                                 "WAV": "Wave files (*.wav)",
                                 "OGG": "Vorbis files (*.ogg)",
@@ -1801,7 +1796,7 @@ class MainWindow(qtw.QMainWindow):
                 PopupError(error_text, str(e))
                 settings.update("file_folder", "")
 
-        def generate_sweep(dial_value):
+        def request_sweep(dial_value):
             f_start = 10
             f_end = 2e4
             dial_max_value = 4095
@@ -1813,7 +1808,7 @@ class MainWindow(qtw.QMainWindow):
                     k = np.log10(f_end / f_start) / (dial_max_value - 1)
                     m = np.log10(1 / f_start)
                     freq_on_dial = 10**(k * (dial_value - 1) - m)
-                self.player.generate_sweep(target_freq=freq_on_dial)
+                self.player.play_sweep(target_freq=freq_on_dial)
 
             except Exception as e:
                 error_text = "Unable to place sweep generate request in the player thread."
@@ -1829,11 +1824,11 @@ class MainWindow(qtw.QMainWindow):
         signal_type_selector.activated.connect(signal_type_selection_changed)
 
         # Disabling voltage widgets for disabled channels
-        def disable_voltage_output_widgets_for_inactive_channels():
+        def update_gui_for_change_in_number_of_channels():
+            sweep_channel.setMaximum(int(settings.channel_count))
             for i, level_widget in level_widgets.items():
                 level_widget.setEnabled(i <= int(settings.channel_count))
-        self.play_parameters_changed.connect(disable_voltage_output_widgets_for_inactive_channels)
-        disable_voltage_output_widgets_for_inactive_channels()
+        update_gui_for_change_in_number_of_channels()
 
         # Disable frequency widget when sine is not selected
         signal_type_selector.currentIndexChanged.connect(
@@ -1868,7 +1863,7 @@ class MainWindow(qtw.QMainWindow):
         mw_left_widget.currentChanged.connect(update_layout_based_on_chosen_tab)
 
         # Functionality for frequency sweep tab
-        freq_dial.valueChanged.connect(generate_sweep)
+        freq_dial.valueChanged.connect(request_sweep)
 
         sweep_channel.valueChanged.connect(self.player.set_sweep_channel, qtc.Qt.QueuedConnection)
         sweep_channel.valueChanged.emit(sweep_channel.value())
@@ -1987,14 +1982,6 @@ class MainWindow(qtw.QMainWindow):
 
         self.generator.exception.connect(generator_exception)
 
-        @qtc.Slot(Exception)
-        def player_exception(e):
-            error_text = "Error in player."
-            informative_text = str(e)
-            PopupError(error_text, informative_text)
-
-        self.player.signal_exception.connect(player_exception)
-
         @qtc.Slot(str)
         def gen_signal_busy(generator_info_text):
             "Busy"
@@ -2012,7 +1999,15 @@ class MainWindow(qtw.QMainWindow):
             player_params_widget.setEnabled(True)
             status_info_widget.setText(message)
         self.player.play_stopped.connect(play_stopped)
-        self.player.signal_exception.connect(lambda: play_stopped("Stopped due to error in player."))
+        
+        @qtc.Slot(Exception)
+        def player_exception(e):
+            error_text = "Error in player."
+            informative_text = str(e)
+            PopupError(error_text, informative_text)
+            play_stopped("Stopped due to error in player.")
+
+        self.player.signal_exception.connect(player_exception)
 
         @qtc.Slot(str)
         def play_started(play_info_text):
@@ -2041,14 +2036,12 @@ class MainWindow(qtw.QMainWindow):
         @qtc.Slot()
         def sys_parameters_changed_actions():
             "System parameters changed"
-            self.player.stop_play()
-            logger.warning("System parameters changed by user.")
-            sweep_channel.setMaximum(int(settings.channel_count))
-            disable_voltage_output_widgets_for_inactive_channels()
+            update_gui_for_change_in_number_of_channels()
             self.player.set_sweep_level(voltage_spin_box.value())  # due to a bug where the levels are not updated
             # after system gain settings are changed by user
             # setting the maximum value for the sweep voltage spin box here would be nice
             # but it depends on channel so not so simple to do
+
         self.sys_parameters_changed.connect(sys_parameters_changed_actions)
 
 

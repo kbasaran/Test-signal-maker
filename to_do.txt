@@ -1,8 +1,4 @@
 handling exceptions from player and other threads - set a consistent strategy
 resampling function would have been good
-timer has a bug. maybe add countdown timer also into callback?
-when stopping with timer better to give status message "stopped with timer"
 press play while playing, timing error and info window doesn't update
-initiate stream only when player object is started, not with each play
-initiate stream settings should be taken out of ogs_play from GUI
-
+sweep state variables - make into a dictionary maybe?
