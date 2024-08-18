@@ -582,7 +582,7 @@ class Player(qtc.QObject):
 
     def callback_for_ugs(self, frames):
         "We are doing a callback for streaming an already generated signal"
-        do_callback_stop = False
+        stream_needs_to_stop_now = False
         try:
             # Try to fill the soundcard buffer within this loop
             empty_frames = int(frames)
@@ -612,7 +612,7 @@ class Player(qtc.QObject):
 
                 # reached end of fade-out and not gonna loop, so stop calling back
                 if (self.fade_out_frames["remaining"] <= empty_frames) and (not self.is_play_in_loop or self.fade_out_frames["stop_after"]):
-                    do_callback_stop = True
+                    stream_needs_to_stop_now = True
 
                 # Apply fade-out
                 if self.fade_out_frames["remaining"] > 0:
@@ -682,7 +682,7 @@ class Player(qtc.QObject):
             if time.time() > self.ugs_play_stopwatch + 60 * 60:  # every hour
                 self.log_through_thread.emit(f"Ongoing with: {self._ugs_play_voltages}Vrms")
                 self.ugs_play_stopwatch = time.time()
-            return mono_signal_chunk, initial_rms, ugs_play_rms_levels, do_callback_stop
+            return mono_signal_chunk, initial_rms, ugs_play_rms_levels, stream_needs_to_stop_now
 
         except Exception as e:
             logger.critical(
@@ -692,7 +692,7 @@ class Player(qtc.QObject):
 
     def callback_for_sweep(self, frames):
         "We are doing a frequency generator callback"
-        do_callback_stop = False
+        stream_exhausted = False
 
         try:
             target_omega, alpha = self.user_req_omega, self.user_req_alpha
@@ -751,7 +751,7 @@ class Player(qtc.QObject):
 
             # If this was the last fade-out callback and calling back needs to stop
             if self.fade_out_frames["remaining"] <= frames:
-                do_callback_stop = True
+                stream_needs_to_stop_now = True
 
             # Apply fade-out
             if not np.isnan(self.fade_out_frames["remaining"]):
@@ -794,7 +794,7 @@ class Player(qtc.QObject):
                 self.sweep_generated.emit(self._omega_last / 2 / np.pi, self.stream.latency)
             # doesn't work on initiation  # what??
 
-            return mono_signal_chunk, initial_rms, target_rms_levels, do_callback_stop
+            return mono_signal_chunk, initial_rms, target_rms_levels, stream_needs_to_stop_now
 
         except Exception as e:
             logger.critical(
@@ -827,11 +827,11 @@ class Player(qtc.QObject):
 
         # Play a user generated signal
         elif self.play_pos is not None:
-            mono_signal_chunk, initial_rms, target_rms_levels, do_callback_stop = self.callback_for_ugs(frames)
+            mono_signal_chunk, initial_rms, target_rms_levels, stream_needs_to_stop_now = self.callback_for_ugs(frames)
 
         # Play a sweep
         elif (not np.isnan(self.user_req_alpha)) or (not np.isnan(self.user_req_omega)):
-            mono_signal_chunk, initial_rms, target_rms_levels, do_callback_stop = self.callback_for_sweep(frames)
+            mono_signal_chunk, initial_rms, target_rms_levels, stream_needs_to_stop_now = self.callback_for_sweep(frames)
 
         # Write to sound card
         indata[:frames, :self.stream.channels] = mono_signal_chunk\
@@ -859,7 +859,7 @@ class Player(qtc.QObject):
                 logger.debug(f"Calculation / play time: {(time.perf_counter_ns() - t1_start) / 1e6:.3f} ms / {frames / self.stream.samplerate * 1000:.3f} ms")
 
         # Playing needs to stop
-        if do_callback_stop:
+        if stream_needs_to_stop_now:
             raise sd.CallbackStop()
 
 
