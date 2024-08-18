@@ -386,7 +386,7 @@ class Player(qtc.QObject):
                            "fade_out_window": np.array([]),
                            "fade_in_window": [],
                            }
-        self.log_output_signal = False  # logs channel 1 when True
+        self.log_output_signal = False  # logs channel 1 and plot it for debugging
 
         # define the sound device based on settings and availability
         self.find_right_sound_device()
@@ -395,9 +395,8 @@ class Player(qtc.QObject):
         self._sweep_voltage = 0
         self._sweep_channel = 0
         
+        # start default stream
         self._create_stream()
-        self.fade_window_size = int(self.stream.samplerate // 20)
-
 
     def _create_stream(self):
         """Prepare the stream object with provided settings"""
@@ -416,6 +415,7 @@ class Player(qtc.QObject):
                                       channels=settings.channel_count,
                                       latency=settings.stream_latency,
                                       )
+        self.fade_window_size = int(self.stream.samplerate // 20)
 
         self.ugs_play_stopwatch = -1.
 
@@ -426,13 +426,11 @@ class Player(qtc.QObject):
                                 }
 
     def announce_callback_is_finished(self):
-        
         if self.play_pos:
             if self.stop_after_seconds:
                 self.play_stopped.emit(f"Stopped with timer after {self.stop_after_seconds/60:.1f} minutes.")
             else:
                 self.play_stopped.emit("Stopped.")
-            print("accounce_callback", time.time())
 
             self.play_pos = None
             self.reset_fade_out()
@@ -441,13 +439,17 @@ class Player(qtc.QObject):
         self.sweep_generator_stopped.emit("Stopped")
         self._bring_sweep_states_to_zero(self.stream.channels)
         self.sweep_generated.emit(np.nan, np.nan)
+        
+        # Debugging
         if self.log_output_signal:
+            # this crashes when a stream is present but no signal has been played yet, e.g. in startup
             self.publish_log.emit(self.output_log)
             self.output_log = {"time_sig": [],
-                               "fade_out_window": [],
-                               "fade_in_window": [],
-                               }
-        logger.info("Audio stream stopped.")
+                                "fade_out_window": [],
+                                "fade_in_window": [],
+                                }
+        
+        logger.info("Callback stopped.")
 
     def find_right_sound_device(self):
         preferred_device_name = settings.preferred_device
@@ -860,6 +862,7 @@ class Player(qtc.QObject):
         if do_callback_stop:
             raise sd.CallbackStop()
 
+
     @qtc.Slot(dict)
     def sweep_play(self, **kwargs):
         try:
@@ -935,7 +938,6 @@ class Player(qtc.QObject):
             self._create_stream()
             self.stream.start()
             self.play_started.emit(status_info_text)
-            print("play_started", time.time())
 
             logger.debug(f"Stream started with block sizes {self.stream.blocksize}.")
 
@@ -1003,8 +1005,7 @@ class Player(qtc.QObject):
         """Sets channel for sweep as an integer value.
         The integer for channel is user friendly, starting from 1.
         """
-        if self.stream.active:
-            self.stop_play_blocking()  # for user hearing safety
+        self.stop_play_blocking()  # for user hearing safety
 
         self._sweep_channel = int(channel)
         self.set_sweep_level(self._sweep_voltage)
@@ -1998,12 +1999,12 @@ class MainWindow(qtw.QMainWindow):
         self.generator.busy.connect(gen_signal_busy)
 
         @qtc.Slot(str)
-        def play_stopped(message):
+        def play_stopped(stop_info_text):
             "User generated signal play stopped"
             player_params_widget.setEnabled(True)
             play_button.setEnabled(True)
             # stop_button.setEnabled(False)
-            status_info_widget.setPlainText(message)
+            status_info_widget.setPlainText(stop_info_text)
         self.player.play_stopped.connect(play_stopped)
         
         @qtc.Slot(Exception)

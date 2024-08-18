@@ -2,3 +2,4 @@ handling exceptions from player and other threads - set a consistent strategy
 resampling function would have been good
 sweep state variables - make into a dictionary maybe?
 how to play when generated a signal with other sampling rate
+log_output_signal crashes at startup
