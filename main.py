@@ -692,7 +692,7 @@ class Player(qtc.QObject):
 
     def callback_for_sweep(self, frames):
         "We are doing a frequency generator callback"
-        stream_exhausted = False
+        stream_needs_to_stop_now = False
 
         try:
             target_omega, alpha = self.user_req_omega, self.user_req_alpha
