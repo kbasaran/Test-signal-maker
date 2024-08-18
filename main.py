@@ -398,7 +398,7 @@ class Player(qtc.QObject):
         # start default stream
         self._create_stream()
 
-    def _create_stream(self):
+    def _create_stream(self, force_sample_rate=None):
         """Prepare the stream object with provided settings"""
 
         # Close any existing stream
@@ -407,11 +407,13 @@ class Player(qtc.QObject):
             self.stream.close()
 
         self._bring_sweep_states_to_zero(settings.channel_count)
+        
+        sample_rate = force_sample_rate if force_sample_rate else settings.play_sample_rate
 
         self.stream = sd.OutputStream(callback=self.callback,
                                       device=self.play_device_idx,
                                       finished_callback=self.announce_callback_is_finished,
-                                      samplerate=settings.play_sample_rate,
+                                      samplerate=sample_rate,
                                       channels=settings.channel_count,
                                       latency=settings.stream_latency,
                                       )
@@ -616,13 +618,13 @@ class Player(qtc.QObject):
 
                 # Apply fade-out
                 if self.fade_out_frames["remaining"] > 0:
-                    fade_start_end_idx = (self.fade_out_frames["remaining"] - self.fade_out_frames["total"],
+                    fade_start_end_idxs = (self.fade_out_frames["remaining"] - self.fade_out_frames["total"],
                                           self.fade_out_frames["remaining"],
                                           )
                     fade_out_window = make_fade_window_n(1,
                                                          0,
                                                          number_of_samples_to_write,
-                                                         fade_start_end_idx,
+                                                         fade_start_end_idxs,
                                                          )
 
                     part_mono_signal_chunk = part_mono_signal_chunk * fade_out_window
@@ -640,13 +642,13 @@ class Player(qtc.QObject):
 
                 # Apply fade-in
                 if self.play_pos < self.fade_window_size:
-                    fade_start_end_idx = (-self.play_pos,
+                    fade_start_end_idxs = (-self.play_pos,
                                           self.fade_window_size - self.play_pos,
                                           )
                     fade_in_window = make_fade_window_n(0,
                                                         1,
                                                         number_of_samples_to_write,
-                                                        fade_start_end_idx,
+                                                        fade_start_end_idxs,
                                                         )
                     part_mono_signal_chunk = part_mono_signal_chunk * fade_in_window
 
@@ -755,13 +757,13 @@ class Player(qtc.QObject):
 
             # Apply fade-out
             if not np.isnan(self.fade_out_frames["remaining"]):
-                fade_start_end_idx = (self.fade_out_frames["remaining"] - self.fade_out_frames["total"],
+                fade_start_end_idxs = (self.fade_out_frames["remaining"] - self.fade_out_frames["total"],
                                       self.fade_out_frames["remaining"],
                                       )
                 fade_out_window = make_fade_window_n(1,
                                                      0,
                                                      frames,
-                                                     fade_start_end_idx,
+                                                     fade_start_end_idxs,
                                                      )
                 mono_signal_chunk = mono_signal_chunk * fade_out_window
 
@@ -935,7 +937,11 @@ class Player(qtc.QObject):
                 qtw.QApplication.instance().aboutToQuit.connect(self.stop_timer.stop)
                 self.stop_timer.start()
 
-            self._create_stream()
+            if play_kwargs["signal_object"].FS == settings.play_sample_rate:
+                self._create_stream()
+            else:
+                self._create_stream(force_sample_rate=play_kwargs["signal_object"].FS)
+
             self.stream.start()
             self.play_started.emit(status_info_text)
 
