@@ -1752,18 +1752,31 @@ class MainWindow(qtw.QMainWindow):
                                 "WAV": "Wave files (*.wav)",
                                 "OGG": "Vorbis files (*.ogg)",
                                 }
-                write_args["file_name"] = qtw.QFileDialog.getSaveFileName(None, "Save audio signal in file...",
-                                                                          os.getcwd(),
+                
+                # add functionality for remembering latest file_folder
+                file_folder = Path(settings.file_folder)
+                if not file_folder.is_dir():
+                    file_folder = Path.cwd()
+                
+                file_raw = qtw.QFileDialog.getSaveFileName(None, "Save audio signal in file...",
+                                                                          str(file_folder),
                                                                           file_filters[write_args["file_format"]],
                                                                           "",
                                                                           )[0]
-                # is this app thing really necessary? why not use qtw.QApplication.instance()
-                writer = FileWriter(app, self.generated_signal, **write_args)
-                writer.file_write_successful.connect(write_file_info_widget.setText)
-                writer.file_write_busy.connect(write_file_info_widget.setText)
-                writer.file_write_fail.connect(write_file_info_widget.setText)
-                writer.finished.connect(lambda: logger.debug("Finished thread file writer"))
-                writer.start()
+                if file_raw and (folder := Path(file_raw).parent).is_dir():
+                    settings.update("file_folder", folder)
+                    # is this app thing really necessary? why not use qtw.QApplication.instance()
+                    write_args["file_name"] = file_raw
+                    writer = FileWriter(app, self.generated_signal, **write_args)
+                    writer.file_write_successful.connect(write_file_info_widget.setText)
+                    writer.file_write_busy.connect(write_file_info_widget.setText)
+                    writer.file_write_fail.connect(write_file_info_widget.setText)
+                    writer.finished.connect(lambda: logger.debug("Finished thread file writer"))
+                    writer.start()
+                else:
+                    logger.debug("Save file selection canceled or invalid save file.")
+                    write_file_info_widget.setText("Invalid or empty save file.")
+                    
             except Exception as e:
                 error_text = "File writer failed."
                 PopupError(error_text, str(e))
@@ -1792,7 +1805,7 @@ class MainWindow(qtw.QMainWindow):
                 file_formats = " ".join(["*." + str(suffix).lower() for suffix in sf.available_formats()])
                 file_raw = qtw.QFileDialog.getOpenFileName(None,
                                                             "Choose audio file to import...",
-                                                            file_folder,
+                                                            str(file_folder),
                                                             f"Audio files ({file_formats})",
                                                             )[0]
                 if file_raw and (file := Path(file_raw)).is_file():
