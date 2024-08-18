@@ -4,3 +4,4 @@ sweep state variables - make into a dictionary maybe?
 how to play when generated a signal with other sampling rate
 log_output_signal crashes at startup
 improve file imports such as mp3 files
+major bug in storage of "high" "low" "safe" "very safe"

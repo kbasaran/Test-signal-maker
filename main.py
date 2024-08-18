@@ -190,10 +190,10 @@ class SysGainAndLevelsPopup(qtw.QDialog):
         stream_latency = qtw.QComboBox()
         stream_latency.addItem("Sound device default: High", "high")
         stream_latency.addItem("Sound device default: Low", "low")
-        stream_latency.addItem("User value: Safe - 25ms", 0.025)
-        stream_latency.addItem("User value: Very safe - 50ms", 0.05)
+        stream_latency.addItem("User value: Safe - 25ms", "0.025")
+        stream_latency.addItem("User value: Very safe - 50ms", "0.05")
 
-        current_val = settings.stream_latency
+        current_val = settings.stream_latency  # always as str
         current_val_idx = stream_latency.findData(current_val)
 
         if current_val_idx == -1:
@@ -409,13 +409,18 @@ class Player(qtc.QObject):
         self._bring_sweep_states_to_zero(settings.channel_count)
         
         sample_rate = force_sample_rate if force_sample_rate else settings.play_sample_rate
+        
+        try: 
+            stream_latency = float(settings.stream_latency)  # for values in s
+        except ValueError:
+            stream_latency = str(settings.stream_latency)  # for 'high' and 'low'
 
         self.stream = sd.OutputStream(callback=self.callback,
                                       device=self.play_device_idx,
                                       finished_callback=self.announce_callback_is_finished,
                                       samplerate=sample_rate,
                                       channels=settings.channel_count,
-                                      latency=settings.stream_latency,
+                                      latency=stream_latency,
                                       )
         self.fade_window_size = int(self.stream.samplerate // 20)
 
