@@ -1,4 +1,4 @@
 handling exceptions from player and other threads - set a consistent strategy
 resampling function would have been good
-press play while playing, timing error and info window doesn't update
 sweep state variables - make into a dictionary maybe?
+how to play when generated a signal with other sampling rate

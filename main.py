@@ -387,7 +387,6 @@ class Player(qtc.QObject):
                            "fade_in_window": [],
                            }
         self.log_output_signal = False  # logs channel 1 when True
-        self.fade_window_size = int(self.stream.samplerate // 20)
 
         # define the sound device based on settings and availability
         self.find_right_sound_device()
@@ -396,9 +395,11 @@ class Player(qtc.QObject):
         self._sweep_voltage = 0
         self._sweep_channel = 0
         
-        self._initiate_stream()
+        self._create_stream()
+        self.fade_window_size = int(self.stream.samplerate // 20)
 
-    def _initiate_stream(self):
+
+    def _create_stream(self):
         """Prepare the stream object with provided settings"""
 
         # Close any existing stream
@@ -431,6 +432,8 @@ class Player(qtc.QObject):
                 self.play_stopped.emit(f"Stopped with timer after {self.stop_after_seconds/60:.1f} minutes.")
             else:
                 self.play_stopped.emit("Stopped.")
+            print("accounce_callback", time.time())
+
             self.play_pos = None
             self.reset_fade_out()
 
@@ -876,7 +879,7 @@ class Player(qtc.QObject):
             
             # If no active stream or a ugs stream ongoing
             if not self.stream.active or self.play_pos:
-                self._initiate_stream()
+                self._create_stream()
                 self.stream.start()
                 logger.info("Sweep stream started.")
 
@@ -929,9 +932,10 @@ class Player(qtc.QObject):
                 qtw.QApplication.instance().aboutToQuit.connect(self.stop_timer.stop)
                 self.stop_timer.start()
 
-            self._initiate_stream()
+            self._create_stream()
             self.stream.start()
             self.play_started.emit(status_info_text)
+            print("play_started", time.time())
 
             logger.debug(f"Stream started with block sizes {self.stream.blocksize}.")
 
@@ -1808,7 +1812,7 @@ class MainWindow(qtw.QMainWindow):
                     k = np.log10(f_end / f_start) / (dial_max_value - 1)
                     m = np.log10(1 / f_start)
                     freq_on_dial = 10**(k * (dial_value - 1) - m)
-                self.player.play_sweep(target_freq=freq_on_dial)
+                self.player.sweep_play(target_freq=freq_on_dial)
 
             except Exception as e:
                 error_text = "Unable to place sweep generate request in the player thread."
@@ -1997,7 +2001,9 @@ class MainWindow(qtw.QMainWindow):
         def play_stopped(message):
             "User generated signal play stopped"
             player_params_widget.setEnabled(True)
-            status_info_widget.setText(message)
+            play_button.setEnabled(True)
+            # stop_button.setEnabled(False)
+            status_info_widget.setPlainText(message)
         self.player.play_stopped.connect(play_stopped)
         
         @qtc.Slot(Exception)
@@ -2013,7 +2019,9 @@ class MainWindow(qtw.QMainWindow):
         def play_started(play_info_text):
             "User generated signal play started"
             player_params_widget.setEnabled(False)
-            status_info_widget.setText(play_info_text)
+            play_button.setEnabled(False)
+            # stop_button.setEnabled(True)
+            status_info_widget.setPlainText(play_info_text)
 
         self.player.play_started.connect(play_started)
 
