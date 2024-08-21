@@ -2,3 +2,4 @@ handling exceptions from player and other threads - set a consistent strategy
 sweep state variables - make into a dictionary maybe?
 log_output_signal crashes at startup
 clicking on stop in linux - some zero padding????
+corrupted settings is not handled well - system gain pop-up can crash
