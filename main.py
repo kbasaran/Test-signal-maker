@@ -2138,29 +2138,35 @@ def parse_args(app_definitions):
                                      epilog={app_definitions['website']},
                                      )
 
-    parser.add_argument('-d', '--debuglevel', nargs="?",
+    parser.add_argument('-d', '--loglevel', nargs="?",
                         choices=["debug", "info", "warning", "error", "critical"],
-                        help="Set debugging level for Python logging. Valid values are debug, info, warning, error and critical.")
+                        help="Set logging level for Python logging. Valid values are debug, info, warning, error and critical.")
 
     return parser.parse_args()
 
 
-def setup_logging(args):
-    if args.debuglevel:
-        log_level = getattr(logging, args.debuglevel.upper())
+def setup_logging(level: str="warning", args=None):
+    if args and args.loglevel:
+        log_level = getattr(logging, args.loglevel.upper())
     else:
-        log_level = logging.INFO
-
+        log_level = level.upper()
+        
     log_filename = Path.home().joinpath(f".{app_definitions['app_name'].lower()}.log")
-    logging.basicConfig(filename=log_filename,
+    
+    file_handler = logging.FileHandler(filename=log_filename)
+    stdout_handler = logging.StreamHandler(stream=sys.stdout)
+    handlers = [file_handler, stdout_handler]
+    
+    logging.basicConfig(handlers=handlers,
                         level=log_level,
+                        format="%(asctime)s %(levelname)s - %(funcName)s: %(message)s",
                         force=True,
                         )
     # had to force this
     # https://stackoverflow.com/questions/30861524/logging-basicconfig-not-creating-log-file-when-i-run-in-pycharm
     logger = logging.getLogger()
-    logger.info(f"Starting with log level {log_level}.")
-
+    logger.info(f"{time.strftime('%c')} - Started logging with log level {log_level}.")
+    
     return logger
 
 
@@ -2168,7 +2174,7 @@ def main():
     global settings, app_definition, logger
 
     args = parse_args(app_definitions)
-    logger = setup_logging(args)
+    logger = setup_logging(args=args)
     settings = Settings(app_definitions["app_name"])
 
     qapp = qtw.QApplication.instance()
