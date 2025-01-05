@@ -4,3 +4,4 @@ log_output_signal crashes at startup
 clicking on stop in linux - some zero padding????
 corrupted settings is not handled well - system gain pop-up can crash
 use new FS detection function from signal tools
+make pixel dimensions relative to font
