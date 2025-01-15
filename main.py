@@ -2137,7 +2137,6 @@ def parse_args(app_definitions):
                                      description=description,
                                      epilog={app_definitions['website']},
                                      )
-
     parser.add_argument('-d', '--loglevel', nargs="?",
                         choices=["debug", "info", "warning", "error", "critical"],
                         help="Set logging level for Python logging. Valid values are debug, info, warning, error and critical.")
