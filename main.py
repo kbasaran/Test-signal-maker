@@ -1673,6 +1673,7 @@ class MainWindow(qtw.QMainWindow):
             self.player = Player()
             self.player.moveToThread(self.player_thread)
             self.player_thread.start(qtc.QThread.TimeCriticalPriority)
+            logging.debug(f"Player thread id: {self.generator_thread.currentThread()}")
 
             qtw.QApplication.instance().aboutToQuit.connect(self.player.stop_play)
             qtw.QApplication.instance().aboutToQuit.connect(self.player_thread.quit)
@@ -1682,6 +1683,7 @@ class MainWindow(qtw.QMainWindow):
             self.generator_thread = qtc.QThread()
             self.generator.moveToThread(self.generator_thread)
             self.generator_thread.start(qtc.QThread.LowPriority)
+            logging.debug(f"Generator thread id: {self.generator_thread.currentThread()}")
 
             qtw.QApplication.instance().aboutToQuit.connect(self.generator_thread.quit)
         
