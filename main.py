@@ -2106,7 +2106,7 @@ class MatplotlibWidget(qtw.QWidget):
                                       scaling="spectrum")
 
             # Power per octave band of signal
-            center_frequencies, three_oct_power = calculate_3rd_octave_bands(generated_signal.time_sig, FS)
+            center_frequencies, three_oct_power = calculate_3rd_octave_bands(generated_signal.time_sig, FS, multiprocess=False)
 
             self.ax.semilogx(PowerSpect[0], 10*np.log10(PowerSpect[1]), label="Power spectral density")
             self.ax.step(center_frequencies, three_oct_power, where="mid", label="1/3 octave bands")
