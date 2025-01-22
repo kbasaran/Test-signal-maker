@@ -1,5 +1,5 @@
 # Test Signal Maker - Loudspeaker testing tool
-# Copyright (C) 2024 - Kerem Basaran
+# Copyright (C) 2025 - Kerem Basaran
 # https://github.com/kbasaran
 __email__ = "kbasaran@gmail.com"
 
@@ -21,10 +21,10 @@ __email__ = "kbasaran@gmail.com"
 from pathlib import Path
 
 app_definitions = {"app_name": "Test Signal Maker",
-                   "version": "0.2.3",
+                   "version": "0.2.4rc",
                    # "version": "Test build " + today.strftime("%Y.%m.%d"),
                    "description": "Test Signal Maker - Loudspeaker test signal tool",
-                   "copyright": "Copyright (C) 2024 Kerem Basaran",
+                   "copyright": "Copyright (C) 2025 Kerem Basaran",
                    "icon_path": str(Path("./logo/icon.ico")),
                    "author": "Kerem Basaran",
                    "author_short": "kbasaran",
