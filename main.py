@@ -1216,6 +1216,8 @@ class MainWindow(qtw.QMainWindow):
     generator_process_imported_file = qtc.Signal(str, dict)
     generator_generate_ugs = qtc.Signal(str, dict)
     
+    update_info_widget = qtc.Signal(str)
+    
             
     # ---- Start player and generator
 
@@ -1621,8 +1623,8 @@ class MainWindow(qtw.QMainWindow):
         write_file_group_layout.addWidget(write_file_button)
 
         # Message box widgets
-        generated_signal_info_widget = qtw.QTextEdit(readOnly=True)
-        generated_signal_info_widget.setSizePolicy(qtw.QSizePolicy.MinimumExpanding,
+        self.generated_signal_info_widget = qtw.QTextEdit(readOnly=True, parent=self)
+        self.generated_signal_info_widget.setSizePolicy(qtw.QSizePolicy.MinimumExpanding,
                                                    qtw.QSizePolicy.Preferred,
                                                    )
         # Is there a way to set the size policies with constructor arguments?
@@ -1682,7 +1684,7 @@ class MainWindow(qtw.QMainWindow):
         mw_right_layout.addWidget(qtw.QLabel("<b>Generated Signal Information</b>"),
                                   alignment=qtc.Qt.AlignHCenter,
                                   )
-        mw_right_layout.addWidget(generated_signal_info_widget)
+        mw_right_layout.addWidget(self.generated_signal_info_widget)
 
         mpl_widget = MatplotlibWidget(self)
         mpl_widget.setMinimumWidth(400)
@@ -1756,6 +1758,7 @@ class MainWindow(qtw.QMainWindow):
                     self.generator.process_imported_file("Reuse existing", kwargs)
                 else:
                     self.generator.generate_ugs(sig_type, kwargs)
+                    
             except Exception as e:
                 error_text = "Unable to place generator request in the generator thread."
                 logger.critical(str(e))
@@ -1943,6 +1946,7 @@ class MainWindow(qtw.QMainWindow):
         # ---- Functions triggered by threads and logic, not the user
 
         # A file is imported into the generator successfully
+        @qtc.Slot(TestSignal)
         def generator_thread_file_import_success(imported_signal):
             index_to_set = sample_rate_selector.findData(imported_signal.FS)
             if index_to_set == -1:
@@ -2004,13 +2008,13 @@ class MainWindow(qtw.QMainWindow):
 
                 # Update user with the changes
                 generator_info_text = self.generated_signal.analysis
-                mpl_widget.update_plot(generated_signal)
+                mpl_widget.update_plot(self.generated_signal)
 
             except Exception as e:
                 self.gen_signal_not_ready.emit(
                     "Failed to receive generated signal from generator thread.\n" + str(e))
             else:  # do this always
-                generated_signal_info_widget.setText(generator_info_text)
+                self.update_info_widget.emit(generator_info_text)
                 generate_group.setEnabled(True)
 
         self.generator.signal_ready.connect(gen_signal_ready)
@@ -2021,8 +2025,7 @@ class MainWindow(qtw.QMainWindow):
             generate_group.setEnabled(True)
             mpl_widget.clear_plot()
             self.player.stop_play()
-            generated_signal_info_widget.setText(generator_info_text)
-            generated_signal_info_widget.repaint()  # why?
+            self.update_info_widget.emit(generator_info_text)
             self.generated_signal = None
 
         self.gen_signal_not_ready.connect(gen_signal_not_ready)
@@ -2042,8 +2045,7 @@ class MainWindow(qtw.QMainWindow):
             generate_group.setEnabled(False)
             mpl_widget.clear_plot()
             self.player.stop_play()
-            generated_signal_info_widget.setText(generator_info_text)
-            generated_signal_info_widget.repaint()
+            self.update_info_widget.emit(generator_info_text)
 
         self.generator.busy.connect(gen_signal_busy)
 
@@ -2101,6 +2103,8 @@ class MainWindow(qtw.QMainWindow):
             # but it depends on channel so not so simple to do
 
         self.sys_parameters_changed.connect(sys_parameters_changed_actions)
+        
+        self.make_connections()
 
 
 class MatplotlibWidget(qtw.QWidget):
