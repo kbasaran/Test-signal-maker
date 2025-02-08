@@ -1210,11 +1210,56 @@ class MainWindow(qtw.QMainWindow):
     gen_parameters_changed = qtc.Signal()
     play_parameters_changed = qtc.Signal()
     sys_parameters_changed = qtc.Signal()
+    
+    generator_import_file = qtc.Signal(str)
+    generator_clear_imported_file = qtc.Signal()
+    generator_process_imported_file = qtc.Signal(str, dict)
+    generator_generate_ugs = qtc.Signal(str, dict)
+    
+            
+    # ---- Start player and generator
+
+    def setup_player_thread(self):
+        self.player_logger = PlayerLogger()
+        self.player_logger.start(qtc.QThread.LowestPriority)
+        
+        qtw.QApplication.instance().aboutToQuit.connect(self.player_logger.quit)
+
+        self.player_thread = qtc.QThread()
+        self.player = Player()
+        self.player.moveToThread(self.player_thread)
+        self.player_thread.start(qtc.QThread.TimeCriticalPriority)
+        logging.debug(f"Player thread id: {self.player_thread.currentThread()}")
+
+        qtw.QApplication.instance().aboutToQuit.connect(self.player.stop_play)
+        qtw.QApplication.instance().aboutToQuit.connect(self.player_thread.quit)
+
+    def setup_generator_thread(self):
+        self.generator = Generator()
+        self.generator_thread = qtc.QThread()
+        self.generator.moveToThread(self.generator_thread)
+        
+        self.generator_import_file.connect(self.generator.import_file)
+        self.generator_clear_imported_file.connect(self.generator.clear_imported_file)
+        self.generator_process_imported_file.connect(self.generator.process_imported_file)
+        self.generator_generate_ugs.connect(self.generator.generate_ugs)
+        self.generator_file_import_success = self.generator.file_import_success
+        
+        self.generator_thread.start(qtc.QThread.LowPriority)
+        print(f"Generator thread id: {self.generator_thread.currentThread()}")
+
+        qtw.QApplication.instance().aboutToQuit.connect(self.generator_thread.quit)
+    
+    def make_connections(self):
+        self.update_info_widget.connect(self.generated_signal_info_widget.setText)
 
     def __init__(self, app):  # is this app thing really necessary?
         """MainWindow constructor"""
         super().__init__()
-
+        
+        self.setup_generator_thread()
+        self.setup_player_thread()
+    
         # Main UI code goes here
         self.setMinimumWidth(1024)
         self.setWindowTitle(app_definitions["app_name"])
@@ -1667,34 +1712,6 @@ class MainWindow(qtw.QMainWindow):
         mw_center_layout.addWidget(mw_center_separator)
         mw_center_layout.addWidget(mw_right_widget)
 
-        # ---- Start player and generator
-
-        def start_player_thread():
-            self.player_logger = PlayerLogger()
-            self.player_logger.start(qtc.QThread.LowestPriority)
-            
-            qtw.QApplication.instance().aboutToQuit.connect(self.player_logger.quit)
-
-            self.player_thread = qtc.QThread()
-            self.player = Player()
-            self.player.moveToThread(self.player_thread)
-            self.player_thread.start(qtc.QThread.TimeCriticalPriority)
-            logging.debug(f"Player thread id: {self.generator_thread.currentThread()}")
-
-            qtw.QApplication.instance().aboutToQuit.connect(self.player.stop_play)
-            qtw.QApplication.instance().aboutToQuit.connect(self.player_thread.quit)
-
-        def start_generator_thread():
-            self.generator = Generator()
-            self.generator_thread = qtc.QThread()
-            self.generator.moveToThread(self.generator_thread)
-            self.generator_thread.start(qtc.QThread.LowPriority)
-            logging.debug(f"Generator thread id: {self.generator_thread.currentThread()}")
-
-            qtw.QApplication.instance().aboutToQuit.connect(self.generator_thread.quit)
-        
-        start_generator_thread()
-        start_player_thread()
 
         # ---- Functions triggered by user through the GUI
         def gain_and_levels_button_clicked():
