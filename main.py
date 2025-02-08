@@ -2009,8 +2009,9 @@ class MainWindow(qtw.QMainWindow):
                 self.generated_signal = generated_signal
 
                 # Update user with the changes
-                generator_info_text = self.generated_signal.analysis
+                self.update_signal_info_widget.emit("Signal generated. Analyzing...")                
                 mpl_widget.update_plot(self.generated_signal)
+                generator_info_text = self.generated_signal.analysis
 
             except Exception as e:
                 self.gen_signal_not_ready.emit(
