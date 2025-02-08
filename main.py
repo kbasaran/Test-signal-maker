@@ -1216,7 +1216,8 @@ class MainWindow(qtw.QMainWindow):
     generator_process_imported_file = qtc.Signal(str, dict)
     generator_generate_ugs = qtc.Signal(str, dict)
     
-    update_info_widget = qtc.Signal(str)
+    update_signal_info_widget = qtc.Signal(str)
+    update_play_info_widget = qtc.Signal(str)
     
             
     # ---- Start player and generator
@@ -1253,7 +1254,8 @@ class MainWindow(qtw.QMainWindow):
         qtw.QApplication.instance().aboutToQuit.connect(self.generator_thread.quit)
     
     def make_connections(self):
-        self.update_info_widget.connect(self.generated_signal_info_widget.setText)
+        self.update_signal_info_widget.connect(self.signal_info_widget.setText)
+        self.update_play_info_widget.connect(self.play_info_widget.setPlainText)
 
     def __init__(self, app):  # is this app thing really necessary?
         """MainWindow constructor"""
@@ -1623,14 +1625,14 @@ class MainWindow(qtw.QMainWindow):
         write_file_group_layout.addWidget(write_file_button)
 
         # Message box widgets
-        self.generated_signal_info_widget = qtw.QTextEdit(readOnly=True, parent=self)
-        self.generated_signal_info_widget.setSizePolicy(qtw.QSizePolicy.MinimumExpanding,
+        self.signal_info_widget = qtw.QTextEdit(readOnly=True, parent=self)
+        self.signal_info_widget.setSizePolicy(qtw.QSizePolicy.MinimumExpanding,
                                                    qtw.QSizePolicy.Preferred,
                                                    )
         # Is there a way to set the size policies with constructor arguments?
 
-        status_info_widget = qtw.QTextEdit(readOnly=True)
-        status_info_widget.setSizePolicy(qtw.QSizePolicy.MinimumExpanding,
+        self.play_info_widget = qtw.QTextEdit(readOnly=True)
+        self.play_info_widget.setSizePolicy(qtw.QSizePolicy.MinimumExpanding,
                                          qtw.QSizePolicy.Preferred,
                                          )
 
@@ -1684,7 +1686,7 @@ class MainWindow(qtw.QMainWindow):
         mw_right_layout.addWidget(qtw.QLabel("<b>Generated Signal Information</b>"),
                                   alignment=qtc.Qt.AlignHCenter,
                                   )
-        mw_right_layout.addWidget(self.generated_signal_info_widget)
+        mw_right_layout.addWidget(self.signal_info_widget)
 
         mpl_widget = MatplotlibWidget(self)
         mpl_widget.setMinimumWidth(400)
@@ -1699,7 +1701,7 @@ class MainWindow(qtw.QMainWindow):
         mw_right_layout.addWidget(qtw.QLabel("<b>Player status</b>"),
                                   alignment=qtc.Qt.AlignHCenter,
                                   )
-        mw_right_layout.addWidget(status_info_widget)
+        mw_right_layout.addWidget(self.play_info_widget)
 
         # Layout Top Level
         mw_center_widget = qtw.QWidget()
@@ -2014,7 +2016,7 @@ class MainWindow(qtw.QMainWindow):
                 self.gen_signal_not_ready.emit(
                     "Failed to receive generated signal from generator thread.\n" + str(e))
             else:  # do this always
-                self.update_info_widget.emit(generator_info_text)
+                self.update_signal_info_widget.emit(generator_info_text)
                 generate_group.setEnabled(True)
 
         self.generator.signal_ready.connect(gen_signal_ready)
@@ -2025,7 +2027,7 @@ class MainWindow(qtw.QMainWindow):
             generate_group.setEnabled(True)
             mpl_widget.clear_plot()
             self.player.stop_play()
-            self.update_info_widget.emit(generator_info_text)
+            self.update_signal_info_widget.emit(generator_info_text)
             self.generated_signal = None
 
         self.gen_signal_not_ready.connect(gen_signal_not_ready)
@@ -2045,7 +2047,7 @@ class MainWindow(qtw.QMainWindow):
             generate_group.setEnabled(False)
             mpl_widget.clear_plot()
             self.player.stop_play()
-            self.update_info_widget.emit(generator_info_text)
+            self.update_signal_info_widget.emit(generator_info_text)
 
         self.generator.busy.connect(gen_signal_busy)
 
@@ -2055,7 +2057,7 @@ class MainWindow(qtw.QMainWindow):
             player_params_widget.setEnabled(True)
             play_button.setEnabled(True)
             # stop_button.setEnabled(False)
-            status_info_widget.setPlainText(stop_info_text)
+            self.update_play_info_widget.emit(stop_info_text)
         self.player.play_stopped.connect(play_stopped)
         
         @qtc.Slot(Exception)
@@ -2073,7 +2075,7 @@ class MainWindow(qtw.QMainWindow):
             player_params_widget.setEnabled(False)
             play_button.setEnabled(False)
             # stop_button.setEnabled(True)
-            status_info_widget.setPlainText(play_info_text)
+            self.update_play_info_widget.emit(play_info_text)
 
         self.player.play_started.connect(play_started)
 
