@@ -56,7 +56,7 @@ from generictools.signal_tools import TestSignal, make_fade_window_n, calculate_
 import generictools.personalized_widgets as pwi
 from dataclasses import dataclass, fields
 import logging
-import multiprocessing
+# import multiprocessing
 
 
 class FileImportDialog(qtw.QDialog):
@@ -2229,7 +2229,8 @@ def main():
 
 
 if __name__ == "__main__":
-    if os.name == "nt":
-        # bug: https://stackoverflow.com/questions/22644805/cx-freeze-creates-multiple-instances-of-program
-        multiprocessing.freeze_support()
+    # if os.name == "nt":
+    #     # bug: https://stackoverflow.com/questions/22644805/cx-freeze-creates-multiple-instances-of-program
+    #     multiprocessing.freeze_support()
+    # not using this. buggy still.
     main()
