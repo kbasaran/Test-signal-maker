@@ -1885,7 +1885,7 @@ class MainWindow(qtw.QMainWindow):
                 if file_raw and (folder := Path(file_raw).parent).is_dir():
                     settings.update("file_folder", folder)
                     # is this app thing really necessary? why not use qtw.QApplication.instance()
-                    write_args["file_name"] = Path(file_raw + "." + write_args["file_format"].lower() if file_raw[-3:] != write_args["file_format"][-3:] else file_raw)
+                    write_args["file_name"] = Path(file_raw + "." + write_args["file_format"].lower() if file_raw[-3:].lower() != write_args["file_format"][-3:].lower() else file_raw)
                     writer = FileWriter(app, self.generated_signal, **write_args)
                     writer.file_write_successful.connect(write_file_info_widget.setText)
                     writer.file_write_busy.connect(write_file_info_widget.setText)
