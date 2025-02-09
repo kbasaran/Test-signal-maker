@@ -1231,11 +1231,8 @@ class MainWindow(qtw.QMainWindow):
         self.player_thread = qtc.QThread()
         self.player = Player()
         self.player.moveToThread(self.player_thread)
-        self.player_thread.start(qtc.QThread.TimeCriticalPriority)
-        logging.debug(f"Player thread id: {self.player_thread.currentThread()}")
 
-        qtw.QApplication.instance().aboutToQuit.connect(self.player.stop_play)
-        qtw.QApplication.instance().aboutToQuit.connect(self.player_thread.quit)
+
 
     def setup_generator_thread(self):
         self.generator = Generator()
@@ -1248,14 +1245,20 @@ class MainWindow(qtw.QMainWindow):
         self.generator_generate_ugs.connect(self.generator.generate_ugs)
         self.generator_file_import_success = self.generator.file_import_success
         
-        self.generator_thread.start(qtc.QThread.LowPriority)
-        print(f"Generator thread id: {self.generator_thread.currentThread()}")
 
-        qtw.QApplication.instance().aboutToQuit.connect(self.generator_thread.quit)
-    
-    def make_connections(self):
+    def make_connections_and_start_threads(self):
         self.update_signal_info_widget.connect(self.signal_info_widget.setText)
         self.update_play_info_widget.connect(self.play_info_widget.setPlainText)
+        
+        qtw.QApplication.instance().aboutToQuit.connect(self.player_thread.quit)
+        
+        qtw.QApplication.instance().aboutToQuit.connect(self.generator_thread.quit)
+        
+        self.generator_thread.start(qtc.QThread.LowPriority)
+        logging.debug(f"Generator thread id: {self.generator_thread.currentThread()}")
+        
+        self.player_thread.start(qtc.QThread.TimeCriticalPriority)
+        logging.debug(f"Player thread id: {self.player_thread.currentThread()}")
 
     def __init__(self, app):  # is this app thing really necessary?
         """MainWindow constructor"""
@@ -1693,7 +1696,7 @@ class MainWindow(qtw.QMainWindow):
         mpl_widget.canvas.setSizePolicy(qtw.QSizePolicy.MinimumExpanding,
                                         qtw.QSizePolicy.Expanding,
                                         )
-        mw_right_layout.addWidget(mpl_widget)
+        mw_right_layout.addWidget(mpl_widget, 3)
         mw_right_layout.addWidget(qtw.QFrame(FrameShape=qtw.QFrame.HLine,
                                              FrameShadow=qtw.QFrame.Sunken),
                                   )
@@ -1701,7 +1704,7 @@ class MainWindow(qtw.QMainWindow):
         mw_right_layout.addWidget(qtw.QLabel("<b>Player status</b>"),
                                   alignment=qtc.Qt.AlignHCenter,
                                   )
-        mw_right_layout.addWidget(self.play_info_widget)
+        mw_right_layout.addWidget(self.play_info_widget, 1)
 
         # Layout Top Level
         mw_center_widget = qtw.QWidget()
@@ -2077,7 +2080,7 @@ class MainWindow(qtw.QMainWindow):
             play_button.setEnabled(False)
             # stop_button.setEnabled(True)
             self.update_play_info_widget.emit(play_info_text)
-
+            
         self.player.play_started.connect(play_started)
 
         @qtc.Slot(str)
@@ -2107,7 +2110,7 @@ class MainWindow(qtw.QMainWindow):
 
         self.sys_parameters_changed.connect(sys_parameters_changed_actions)
         
-        self.make_connections()
+        self.make_connections_and_start_threads()
 
 
 class MatplotlibWidget(qtw.QWidget):
