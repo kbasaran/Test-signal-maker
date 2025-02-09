@@ -267,6 +267,10 @@ class Generator(qtc.QObject):
     file_import_success = qtc.Signal(TestSignal)
     signal_not_ready = qtc.Signal(str)
     exception = qtc.Signal(Exception)
+    
+    def __init__(self):
+        super().__init__()
+        self.signal_not_ready.emit("No signal has been generated.")
 
     @qtc.Slot(str)
     def import_file(self, import_file_path):
@@ -1291,7 +1295,7 @@ class MainWindow(qtw.QMainWindow):
             self.sample_rate_selector.setCurrentIndex(index_to_set)
         self.duration_widget.setValue(imported_signal.T)
         self.gen_signal_not_ready.emit((f"Imported successfully.\n{imported_signal.initial_data_analysis}"
-                                        "\n\nContinue setting up processing and press 'Generate' when ready."
+                                        "\n\nSet your filters and press 'Generate' to continue."
                                         )
                                        )
 
@@ -1861,7 +1865,6 @@ class MainWindow(qtw.QMainWindow):
                 return
             try:
                 self.player.stop_play()
-                # time.sleep(0.001)
                 file_filters = {"FLAC": "FLAC files (*.flac)",
                                 "WAV": "Wave files (*.wav)",
                                 "OGG": "Vorbis files (*.ogg)",
@@ -1872,15 +1875,17 @@ class MainWindow(qtw.QMainWindow):
                 if not file_folder.is_dir():
                     file_folder = Path.cwd()
                 
-                file_raw = qtw.QFileDialog.getSaveFileName(None, "Save audio signal in file...",
+                path_unverified = qtw.QFileDialog.getSaveFileName(None, "Save audio signal in file...",
                                                                           str(file_folder),
                                                                           file_filters[write_args["file_format"]],
                                                                           "",
-                                                                          )[0]
+                                                                          )
+                file_raw = path_unverified[0]
+                
                 if file_raw and (folder := Path(file_raw).parent).is_dir():
                     settings.update("file_folder", folder)
                     # is this app thing really necessary? why not use qtw.QApplication.instance()
-                    write_args["file_name"] = file_raw
+                    write_args["file_name"] = Path(file_raw + "." + write_args["file_format"].lower() if file_raw[-3:] != write_args["file_format"][-3:] else file_raw)
                     writer = FileWriter(app, self.generated_signal, **write_args)
                     writer.file_write_successful.connect(write_file_info_widget.setText)
                     writer.file_write_busy.connect(write_file_info_widget.setText)
