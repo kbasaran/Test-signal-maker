@@ -263,15 +263,15 @@ class Generator(qtc.QObject):
 
     """
     # signals need to be class variables as you see. don't know why. PyQt thing.
-    signal_ready = qtc.Signal(TestSignal)
+    signal_ready = qtc.Signal(TestSignal, tuple, tuple)
     file_import_success = qtc.Signal(TestSignal)
-    busy = qtc.Signal(str)
+    signal_not_ready = qtc.Signal(str)
     exception = qtc.Signal(Exception)
 
     @qtc.Slot(str)
     def import_file(self, import_file_path):
         logger.debug(f'Importing file...{import_file_path}')
-        self.busy.emit("Importing file...")
+        self.signal_not_ready.emit("Importing file...")
         try:
             self.imported_signal = TestSignal("Imported",
                                               import_file_path=import_file_path,
@@ -291,13 +291,17 @@ class Generator(qtc.QObject):
 
     @qtc.Slot(str, dict)
     def process_imported_file(self, sig_type, kwargs):
-        self.busy.emit("Generating from import...")
+        self.signal_not_ready.emit("Generating from import...")
         try:
             if not hasattr(self, "imported_signal") or not self.imported_signal:
                 raise KeyError("No file imported to process.")
             generated_signal = copy.deepcopy(self.imported_signal)
             generated_signal.reuse_existing(**kwargs)
-            self.signal_ready.emit(generated_signal)
+            
+            self.signal_not_ready.emit(f"Analyzing signal...")
+            power_spectrum, octave_bands = generated_signal.spectrum_analysis()
+            
+            self.signal_ready.emit(generated_signal, power_spectrum, octave_bands)
             logger.debug("Imported signal has been processed and published.")
 
         except Exception as e:
@@ -308,10 +312,14 @@ class Generator(qtc.QObject):
     @qtc.Slot(str, dict)
     def generate_ugs(self, sig_type, kwargs):
         logger.debug(f'Generate ugs "{sig_type}" initiated')
-        self.busy.emit(f"Generating {sig_type.lower()}...")
+        self.signal_not_ready.emit(f"Generating {sig_type.lower()}...")
         try:
             generated_signal = TestSignal(sig_type, **kwargs)
-            self.signal_ready.emit(generated_signal)
+    
+            self.signal_not_ready.emit(f"Analyzing signal...")
+            power_spectrum, octave_bands = generated_signal.spectrum_analysis()
+            
+            self.signal_ready.emit(generated_signal, power_spectrum, octave_bands)
             logger.info(f"Signal with type {sig_type} generated.")
 
         except Exception as e:
@@ -1211,10 +1219,10 @@ class MainWindow(qtw.QMainWindow):
     play_parameters_changed = qtc.Signal()
     sys_parameters_changed = qtc.Signal()
     
-    generator_import_file = qtc.Signal(str)
-    generator_clear_imported_file = qtc.Signal()
-    generator_process_imported_file = qtc.Signal(str, dict)
-    generator_generate_ugs = qtc.Signal(str, dict)
+    request_generator_generate_ugs = qtc.Signal(str, dict)
+    request_generator_process_imported_file = qtc.Signal(str, dict)
+    request_generator_import_file = qtc.Signal(str)
+    request_generator_clear_imported_file = qtc.Signal()
     
     update_signal_info_widget = qtc.Signal(str)
     update_play_info_widget = qtc.Signal(str)
@@ -1232,33 +1240,97 @@ class MainWindow(qtw.QMainWindow):
         self.player = Player()
         self.player.moveToThread(self.player_thread)
 
-
-
     def setup_generator_thread(self):
         self.generator = Generator()
         self.generator_thread = qtc.QThread()
         self.generator.moveToThread(self.generator_thread)
+
+    def setup_poll_sound_devices_thread(self): 
+        # Update detected sound devices every N seconds
+        self.poll_sound_devices_timer = qtc.QTimer()
+        self.poll_sound_devices_timer.setInterval(2000)
+        self.poll_sound_devices_timer.start()  # priority tanımlayınca interval devre dışı kaldı. garip.
+
+        self.poll_sound_devices_timer.timeout.connect(self.player.poll_sound_devices)
+        self.player.signal_sound_devices_polled.connect(self.sound_device_info_widget.setText)
+    
+    @qtc.Slot(TestSignal)
+    def handler_generator_signal_ready(self, generated_signal, power_spectrum, octave_bands):
+        logger.debug("Main window received signal 'Generated signal ready'")
+        try:
+            self.generated_signal = generated_signal
+
+            # Update user with the changes
+            self.update_signal_info_widget.emit("Signal generated. Analyzing...")                
+            self.mpl_widget.update_plot(self.generated_signal, power_spectrum, octave_bands)
+            generator_info_text = self.generated_signal.analysis
+
+        except Exception as e:
+            self.gen_signal_not_ready.emit(
+                "Failed to receive generated signal from generator thread.\n" + str(e))
+        else:  # do this always
+            self.update_signal_info_widget.emit(generator_info_text)
+            
+        self.generate_group.setEnabled(True)
+
+    @qtc.Slot(str)
+    def handler_generator_signal_not_ready(self, generator_info_text):
+        "Signal not ready"
+        self.mpl_widget.clear_plot()
+        self.player.stop_play()
+        self.update_signal_info_widget.emit(generator_info_text)
+        self.generated_signal = None
         
-        self.generator_import_file.connect(self.generator.import_file)
-        self.generator_clear_imported_file.connect(self.generator.clear_imported_file)
-        self.generator_process_imported_file.connect(self.generator.process_imported_file)
-        self.generator_generate_ugs.connect(self.generator.generate_ugs)
-        self.generator_file_import_success = self.generator.file_import_success
-        
+    @qtc.Slot(TestSignal)
+    def handle_generator_file_imported_with_success(self, imported_signal):
+        # A file is imported into the generator successfully
+        index_to_set = self.sample_rate_selector.findData(imported_signal.FS)
+        if index_to_set == -1:
+            self.sample_rate_selector.addItem(str(imported_signal.FS), imported_signal.FS)
+        else:
+            self.sample_rate_selector.setCurrentIndex(index_to_set)
+        self.duration_widget.setValue(imported_signal.T)
+        self.gen_signal_not_ready.emit((f"Imported successfully.\n{imported_signal.initial_data_analysis}"
+                                        "\n\nContinue setting up processing and press 'Generate' when ready."
+                                        )
+                                       )
+
+    @qtc.Slot(Exception)
+    def handler_generator_exception(self, e):
+        error_text = "Error in signal generator."
+        informative_text = str(e)
+        self.handler_generator_signal_not_ready(error_text)
+        PopupError(error_text, informative_text)
 
     def make_connections_and_start_threads(self):
         self.update_signal_info_widget.connect(self.signal_info_widget.setText)
         self.update_play_info_widget.connect(self.play_info_widget.setPlainText)
         
-        qtw.QApplication.instance().aboutToQuit.connect(self.player_thread.quit)
+        # Generator signals
+        self.gen_signal_not_ready.connect(self.handler_generator_signal_not_ready)
+        self.generator.signal_ready.connect(self.handler_generator_signal_ready)
+        self.generator.signal_not_ready.connect(self.handler_generator_signal_not_ready)
+        self.generator.file_import_success.connect(self.handle_generator_file_imported_with_success)
+        self.generator.exception.connect(self.handler_generator_exception)
         
+        # Generator slots
+        self.request_generator_generate_ugs.connect(self.generator.generate_ugs)
+        self.request_generator_process_imported_file.connect(self.generator.process_imported_file)
+        self.request_generator_import_file.connect(self.generator.import_file)
+        self.request_generator_clear_imported_file.connect(self.generator.clear_imported_file)
+
+        # Cleaning threads on exit
+        qtw.QApplication.instance().aboutToQuit.connect(self.player_thread.quit)
         qtw.QApplication.instance().aboutToQuit.connect(self.generator_thread.quit)
         
+        # Start threads
         self.generator_thread.start(qtc.QThread.LowPriority)
         logging.debug(f"Generator thread id: {self.generator_thread.currentThread()}")
         
         self.player_thread.start(qtc.QThread.TimeCriticalPriority)
         logging.debug(f"Player thread id: {self.player_thread.currentThread()}")
+        
+        self.setup_poll_sound_devices_thread()
 
     def __init__(self, app):  # is this app thing really necessary?
         """MainWindow constructor"""
@@ -1301,7 +1373,7 @@ class MainWindow(qtw.QMainWindow):
                                       )
         compression_widget.valueChanged.connect(self.gen_parameters_changed)
 
-        duration_widget = qtw.QDoubleSpinBox(Minimum=1,
+        self.duration_widget = qtw.QDoubleSpinBox(Minimum=1,
                                              Maximum=60*10,
                                              Value=60,
                                              Decimals=2,
@@ -1310,26 +1382,27 @@ class MainWindow(qtw.QMainWindow):
                                                      "\nWarning: Long signals with high sampling rates "
                                                      "will take a long time to generate!"
                                              )
-        duration_widget.valueChanged.connect(self.gen_parameters_changed)
+        self.duration_widget.valueChanged.connect(self.gen_parameters_changed)
 
-        sample_rate_selector = qtw.QComboBox()
+        self.sample_rate_selector = qtw.QComboBox()
 
         sample_rate_list = [22050, 44100, 48000, 96000]
         for i in sample_rate_list:
-            sample_rate_selector.addItem(str(i), i)
+            self.sample_rate_selector.addItem(str(i), i)
             
         try:
-            sample_rate_selector.setCurrentIndex(sample_rate_list.index(settings.play_sample_rate))
+            self.sample_rate_selector.setCurrentIndex(sample_rate_list.index(settings.play_sample_rate))
         except ValueError:
-            sample_rate_selector.setCurrentIndex(1)
+            self.sample_rate_selector.setCurrentIndex(1)
 
-        sample_rate_selector.currentTextChanged.connect(self.gen_parameters_changed)
+        self.sample_rate_selector.currentTextChanged.connect(self.gen_parameters_changed)
 
         # Filters
         self.no_of_filters = 8
 
-        class Filter:
+        class Filter():
             def __init__(self, parent):
+                super().__init__()
                 self.widgets = {"type": qtw.QComboBox(),
                                 "frequency": qtw.QSpinBox(Minimum=1,
                                                           Maximum=999999,
@@ -1356,18 +1429,20 @@ class MainWindow(qtw.QMainWindow):
                 self.widgets["type"].currentTextChanged.connect(parent.gen_parameters_changed)
                 self.layout = qtw.QHBoxLayout()
 
-                for filter in self.widgets.values():
-                    self.layout.addWidget(filter)
+                for widget in self.widgets.values():
+                    self.layout.addWidget(widget)
+            
+            def as_dict(self):
+                return {"type": self.widgets["type"].currentText(),
+                        "frequency": self.widgets["frequency"].value(),
+                        "order": self.widgets["order"].currentData(),
+                    }
 
-        filts_layout, filts_widgets = [None] * self.no_of_filters, [None] * self.no_of_filters
-
-        for i in range(self.no_of_filters):
-            filter = Filter(parent=self)
-            filts_layout[i], filts_widgets[i] = filter.layout, filter.widgets
+        filters = [Filter(parent=self) for i in range(self.no_of_filters)]
         
         # add a basic HP filter to avoid DC offset
-        filts_widgets[0]["type"].setCurrentText("HP")
-        filts_widgets[0]["frequency"].setValue(1)
+        filters[0].widgets["type"].setCurrentText("HP")
+        filters[0].widgets["frequency"].setValue(1)
 
         # Generator parameters form
         gen_form_layout = qtw.QFormLayout()
@@ -1375,12 +1450,12 @@ class MainWindow(qtw.QMainWindow):
         gen_form_layout.addRow("Frequency", frequency_widget)
         gen_form_layout.addRow(pwi.SunkenLine())
         for i in range(self.no_of_filters):
-            gen_form_layout.addRow(f"Filter {i + 1}", filts_layout[i])
+            gen_form_layout.addRow(f"Filter {i + 1}", filters[i].layout)
         gen_form_layout.addRow(pwi.SunkenLine())
         gen_form_layout.addRow("Compression", compression_widget)
         gen_form_layout.addRow(pwi.SunkenLine())
-        gen_form_layout.addRow("Duration", duration_widget)
-        gen_form_layout.addRow("Sample rate", sample_rate_selector)
+        gen_form_layout.addRow("Duration", self.duration_widget)
+        gen_form_layout.addRow("Sample rate", self.sample_rate_selector)
         gen_form_layout.addRow(pwi.SunkenLine())
 
         # 'Generate' button
@@ -1389,14 +1464,13 @@ class MainWindow(qtw.QMainWindow):
                                           )
 
         # Make the total layout and widget of generator group
-        generate_group = qtw.QWidget()
-        generate_group_layout = qtw.QVBoxLayout()
-        generate_group.setLayout(generate_group_layout)
+        self.generate_group = qtw.QWidget()
+        self.generate_group.setLayout(qtw.QVBoxLayout())
 
         # Add the widgets, layouts
-        generate_group_layout.addLayout(gen_form_layout)
-        # generate_group_layout.addSpacing(10)
-        generate_group_layout.addWidget(generate_button)
+        self.generate_group.layout().addLayout(gen_form_layout)
+        # self.generate_group.layout().addSpacing(10)
+        self.generate_group.layout().addWidget(generate_button)
 
         # ---- 'Play' tab
         sys_gain_adjust_button = qtw.QPushButton("Define system gain parameters")
@@ -1466,7 +1540,7 @@ class MainWindow(qtw.QMainWindow):
         player_buttons_layout.addWidget(stop_button)
 
         # Sound device info
-        sound_device_info_widget = qtw.QTextEdit(readOnly=True)
+        self.sound_device_info_widget = qtw.QTextEdit(readOnly=True)
 
         # Make the total layout and widget of generator group
         player_group = qtw.QWidget()
@@ -1480,7 +1554,7 @@ class MainWindow(qtw.QMainWindow):
         play_group_layout.addWidget(qtw.QLabel("<b>Sound Device Information</b>"),
                                     alignment=qtc.Qt.AlignHCenter,
                                     )
-        play_group_layout.addWidget(sound_device_info_widget)
+        play_group_layout.addWidget(self.sound_device_info_widget)
         play_group_layout.addSpacing(10)
         play_group_layout.addLayout(player_buttons_layout)
 
@@ -1673,7 +1747,7 @@ class MainWindow(qtw.QMainWindow):
         # ---- Layout of main window
         # Layout left side (tabs)
         mw_left_widget = qtw.QTabWidget()
-        mw_left_widget.addTab(generate_group, "Generator")
+        mw_left_widget.addTab(self.generate_group, "Generator")
         mw_left_widget.addTab(player_group, "Player")
         mw_left_widget.addTab(write_file_group, "Write file")
         mw_left_widget.addTab(sweep_group, "Sweep generator")
@@ -1691,12 +1765,12 @@ class MainWindow(qtw.QMainWindow):
                                   )
         mw_right_layout.addWidget(self.signal_info_widget)
 
-        mpl_widget = MatplotlibWidget(self)
-        mpl_widget.setMinimumWidth(400)
-        mpl_widget.canvas.setSizePolicy(qtw.QSizePolicy.MinimumExpanding,
+        self.mpl_widget = MatplotlibWidget(self)
+        self.mpl_widget.setMinimumWidth(400)
+        self.mpl_widget.canvas.setSizePolicy(qtw.QSizePolicy.MinimumExpanding,
                                         qtw.QSizePolicy.Expanding,
                                         )
-        mw_right_layout.addWidget(mpl_widget, 3)
+        mw_right_layout.addWidget(self.mpl_widget, 3)
         mw_right_layout.addWidget(qtw.QFrame(FrameShape=qtw.QFrame.HLine,
                                              FrameShadow=qtw.QFrame.Sunken),
                                   )
@@ -1753,21 +1827,23 @@ class MainWindow(qtw.QMainWindow):
             try:
                 # Make the signal
                 sig_type = signal_type_selector.currentText()
-                kwargs = {"filters": filts_widgets,
+                kwargs = {"filters": [filter.as_dict() for filter in filters],
                           "frequency": frequency_widget.value(),
                           "compression": compression_widget.value(),
-                          "T": duration_widget.value(),
-                          "FS": sample_rate_selector.currentData(),
+                          "T": self.duration_widget.value(),
+                          "FS": self.sample_rate_selector.currentData(),
                           }
+                self.generate_group.setEnabled(False)
                 if sig_type == "Imported":
-                    self.generator.process_imported_file("Reuse existing", kwargs)
+                    self.request_generator_process_imported_file.emit("Reuse existing", kwargs)
                 else:
-                    self.generator.generate_ugs(sig_type, kwargs)
+                    self.request_generator_generate_ugs.emit(sig_type, kwargs)
                     
             except Exception as e:
                 error_text = "Unable to place generator request in the generator thread."
                 logger.critical(str(e))
                 PopupError(error_text, str(e))
+                self.generate_group.setEnabled(True)
 
         def write_file_clicked():
             if not self.generated_signal:
@@ -1848,10 +1924,10 @@ class MainWindow(qtw.QMainWindow):
                                                             )[0]
                 if file_raw and (file := Path(file_raw)).is_file():
                     settings.update("file_folder", file.parent)
-                    self.generator.import_file(file)
+                    self.request_generator_import_file.emit(str(file))
                 else:
                     self.gen_signal_not_ready.emit("No file chosen.")
-                    self.generator.clear_imported_file()
+                    self.request_generator_clear_imported_file()
 
             except Exception as e:
                 error_text = "File import failed."
@@ -1879,7 +1955,7 @@ class MainWindow(qtw.QMainWindow):
 
         # User changed generator signal type
         def signal_type_selection_changed():
-            duration_widget.setEnabled(signal_type_selector.currentText() != "Imported")
+            self.duration_widget.setEnabled(signal_type_selector.currentText() != "Imported")
 
             if signal_type_selector.currentText() == "Imported":
                 choose_import_file()
@@ -1949,22 +2025,7 @@ class MainWindow(qtw.QMainWindow):
         write_file_button.clicked.connect(write_file_clicked)
 
         # ---- Functions triggered by threads and logic, not the user
-
-        # A file is imported into the generator successfully
-        @qtc.Slot(TestSignal)
-        def generator_thread_file_import_success(imported_signal):
-            index_to_set = sample_rate_selector.findData(imported_signal.FS)
-            if index_to_set == -1:
-                sample_rate_selector.addItem(str(imported_signal.FS), imported_signal.FS)
-            else:
-                sample_rate_selector.setCurrentIndex(index_to_set)
-            duration_widget.setValue(imported_signal.T)
-            self.gen_signal_not_ready.emit((f"Imported successfully.\n{imported_signal.initial_data_analysis}"
-                                            "\n\nContinue setting up processing and press 'Generate' when ready."
-                                            )
-                                           )
-        self.generator.file_import_success.connect(generator_thread_file_import_success)
-
+        
         def update_sweep_info_screen(freq, latency):
             if np.isnan(freq) and not np.isnan(latency):
                 sweep_status.setText("Muted")
@@ -1995,65 +2056,6 @@ class MainWindow(qtw.QMainWindow):
         def impossible_voltage_request_happened_at_sweeper(str):
             voltage_spin_box.setValue(0)  # not very user friendly
         self.player.impossible_voltage_request.connect(impossible_voltage_request_happened_at_sweeper)
-
-        # Update detected sound devices every N seconds
-        self.poll_sound_devices_timer = qtc.QTimer()
-        self.poll_sound_devices_timer.setInterval(2000)
-        self.poll_sound_devices_timer.start()  # priority tanımlayınca interval devre dışı kaldı. garip.
-
-        self.poll_sound_devices_timer.timeout.connect(self.player.poll_sound_devices)
-        self.player.signal_sound_devices_polled.connect(sound_device_info_widget.setText)
-
-        # ---- Slots of main window GUI
-        @qtc.Slot(TestSignal)
-        def gen_signal_ready(generated_signal):
-            logger.debug("Main window received signal 'Generated signal ready'")
-            try:
-                self.generated_signal = generated_signal
-
-                # Update user with the changes
-                self.update_signal_info_widget.emit("Signal generated. Analyzing...")                
-                mpl_widget.update_plot(self.generated_signal)
-                generator_info_text = self.generated_signal.analysis
-
-            except Exception as e:
-                self.gen_signal_not_ready.emit(
-                    "Failed to receive generated signal from generator thread.\n" + str(e))
-            else:  # do this always
-                self.update_signal_info_widget.emit(generator_info_text)
-                generate_group.setEnabled(True)
-
-        self.generator.signal_ready.connect(gen_signal_ready)
-
-        @qtc.Slot(str)
-        def gen_signal_not_ready(generator_info_text):
-            "Signal not ready"
-            generate_group.setEnabled(True)
-            mpl_widget.clear_plot()
-            self.player.stop_play()
-            self.update_signal_info_widget.emit(generator_info_text)
-            self.generated_signal = None
-
-        self.gen_signal_not_ready.connect(gen_signal_not_ready)
-
-        @qtc.Slot(Exception)
-        def generator_exception(e):
-            error_text = "Error in signal generator."
-            informative_text = str(e)
-            gen_signal_not_ready(error_text)
-            PopupError(error_text, informative_text)
-
-        self.generator.exception.connect(generator_exception)
-
-        @qtc.Slot(str)
-        def gen_signal_busy(generator_info_text):
-            "Busy"
-            generate_group.setEnabled(False)
-            mpl_widget.clear_plot()
-            self.player.stop_play()
-            self.update_signal_info_widget.emit(generator_info_text)
-
-        self.generator.busy.connect(gen_signal_busy)
 
         @qtc.Slot(str)
         def play_stopped(stop_info_text):
@@ -2129,22 +2131,23 @@ class MatplotlibWidget(qtw.QWidget):
         fig.tight_layout()
 
     @qtc.Slot(TestSignal)
-    def update_plot(self, generated_signal):
+    def update_plot(self, generated_signal, power_spectrum, octave_bands):
         self.ax.cla()
         if generated_signal:
-            # Power spectrum of signal
+            # # Power spectrum of signal
+            # FS = generated_signal.FS
+            # PowerSpect = signal.welch(generated_signal.time_sig.astype("float32"),
+            #                           fs=FS,
+            #                           nperseg=FS/4,  # defines also window size
+            #                           window="hann",
+            #                           scaling="spectrum")
+
+            # # Power per octave band of signal
+            # center_frequencies, three_oct_power = calculate_3rd_octave_bands(generated_signal.time_sig, FS, multiprocess=False)
+
             FS = generated_signal.FS
-            PowerSpect = signal.welch(generated_signal.time_sig.astype("float32"),
-                                      fs=FS,
-                                      nperseg=FS/4,  # defines also window size
-                                      window="hann",
-                                      scaling="spectrum")
-
-            # Power per octave band of signal
-            center_frequencies, three_oct_power = calculate_3rd_octave_bands(generated_signal.time_sig, FS, multiprocess=False)
-
-            self.ax.semilogx(PowerSpect[0], 10*np.log10(PowerSpect[1]), label="Power spectral density")
-            self.ax.step(center_frequencies, three_oct_power, where="mid", label="1/3 octave bands")
+            self.ax.semilogx(*power_spectrum, label="Power spectral density")
+            self.ax.step(*octave_bands, where="mid", label="1/3 octave bands")
 
             self.ax.set_xlim(10, FS/2)
             self.ax.set_ylim(-70, 5)
@@ -2155,7 +2158,7 @@ class MatplotlibWidget(qtw.QWidget):
         self.canvas.draw()
 
     def clear_plot(self):
-        self.update_plot(None)
+        self.update_plot(None, None, None)
 
 
 def parse_args(app_definitions):
