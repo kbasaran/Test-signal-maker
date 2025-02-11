@@ -1305,6 +1305,8 @@ class MainWindow(qtw.QMainWindow):
         informative_text = str(e)
         self.handler_generator_signal_not_ready(error_text)
         PopupError(error_text, informative_text)
+        self.generate_group.setEnabled(True)
+        
 
     def make_connections_and_start_threads(self):
         self.update_signal_info_widget.connect(self.signal_info_widget.setText)
@@ -1863,29 +1865,33 @@ class MainWindow(qtw.QMainWindow):
                 informative_text = "Reduce target RMS voltage and/or signal crest factor.\nMake sure system gain is entered correctly and increase amplifier gain if necessary."
                 PopupError(error_text, informative_text)
                 return
+
+            self.player.stop_play()
+            file_filters = {"FLAC": "FLAC files (*.flac)",
+                            "WAV": "Wave files (*.wav)",
+                            "OGG": "Vorbis files (*.ogg)",
+                            }
+            
+            # add functionality for remembering latest file_folder
+            file_folder = Path(settings.file_folder)
+            if not file_folder.is_dir():
+                file_folder = Path.cwd()
+            
+            path_unverified = qtw.QFileDialog.getSaveFileName(None, "Save audio signal in file...",
+                                                                      str(file_folder),
+                                                                      file_filters[write_args["file_format"]],
+                                                                      "",
+                                                                      )
+            
             try:
-                self.player.stop_play()
-                file_filters = {"FLAC": "FLAC files (*.flac)",
-                                "WAV": "Wave files (*.wav)",
-                                "OGG": "Vorbis files (*.ogg)",
-                                }
-                
-                # add functionality for remembering latest file_folder
-                file_folder = Path(settings.file_folder)
-                if not file_folder.is_dir():
-                    file_folder = Path.cwd()
-                
-                path_unverified = qtw.QFileDialog.getSaveFileName(None, "Save audio signal in file...",
-                                                                          str(file_folder),
-                                                                          file_filters[write_args["file_format"]],
-                                                                          "",
-                                                                          )
                 file_raw = path_unverified[0]
-                
-                if file_raw and (folder := Path(file_raw).parent).is_dir():
-                    settings.update("file_folder", folder)
+                if file_raw:
+                    file = Path(file_raw)
+                    assert file.parent.exists()
+                    settings.update("file_folder", str(file.parent))
                     # is this app thing really necessary? why not use qtw.QApplication.instance()
-                    write_args["file_name"] = Path(file_raw + "." + write_args["file_format"].lower() if file_raw[-3:].lower() != write_args["file_format"][-3:].lower() else file_raw)
+                    # in Nautilus the filenames come without suffixes. therefore added below line.
+                    write_args["file_name"] = Path(str(file) + "." + write_args["file_format"].lower() if str(file)[-3:].lower() != write_args["file_format"][-3:].lower() else str(file))
                     writer = FileWriter(app, self.generated_signal, **write_args)
                     writer.file_write_successful.connect(write_file_info_widget.setText)
                     writer.file_write_busy.connect(write_file_info_widget.setText)
@@ -1895,7 +1901,7 @@ class MainWindow(qtw.QMainWindow):
                 else:
                     logger.debug("Save file selection canceled or invalid save file.")
                     write_file_info_widget.setText("Invalid or empty save file.")
-                    
+                
             except Exception as e:
                 error_text = "File writer failed."
                 PopupError(error_text, str(e))
@@ -1932,7 +1938,7 @@ class MainWindow(qtw.QMainWindow):
                     self.request_generator_import_file.emit(str(file))
                 else:
                     self.gen_signal_not_ready.emit("No file chosen.")
-                    self.request_generator_clear_imported_file()
+                    self.request_generator_clear_imported_file.emit()
 
             except Exception as e:
                 error_text = "File import failed."
