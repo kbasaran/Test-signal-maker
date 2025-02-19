@@ -5,3 +5,4 @@ corrupted settings is not handled well - system gain pop-up can crash
 use new FS detection function from signal tools
 make pixel dimensions relative to font
 show player and generator statuses at start
+on fresh start, when you generate, play and then interrupt it with sweeping, you get a "missing variable initial_rms" error
