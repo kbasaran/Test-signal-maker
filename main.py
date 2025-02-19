@@ -127,17 +127,17 @@ class SysGainAndLevelsPopup(qtw.QDialog):
         sys_gain_form_layout = qtw.QFormLayout()
 
         preferred_device_name = settings.preferred_device
-
         preferred_device_widget = qtw.QComboBox()
         for device in sd.query_devices():
             hostapi_name = sd.query_hostapis(index=device['hostapi'])['name']
+            device_name = device['name']
+            data_name = hostapi_name + " - " + device_name
+            user_friendly_name = f"{data_name} - {device['max_output_channels']} channels"
+            if device["index"] == sd.default.device[1]:
+                default_device_user_friendly_name = user_friendly_name
             if device["max_output_channels"] > 0 and "WDM" not in hostapi_name and "MME" not in hostapi_name:
-                device_name = device['name']
-                data_name = hostapi_name + " - " + device_name
-                user_friendly_name = f"{data_name} - {device['max_output_channels']} channels"
-                if device["index"] == sd.default.device[1]:
-                    default_device_user_friendly_name = user_friendly_name
                 preferred_device_widget.addItem(user_friendly_name, data_name)  # data is the pure name from sounddevice. sometimes duplicate.
+
         preferred_device_index = preferred_device_widget.findData(preferred_device_name)  # -1 needs not found, and empty selection
         if preferred_device_index == -1:
             preferred_device_widget.setCurrentText(default_device_user_friendly_name)  # does this raise an error if that device name is not in the combobox?
