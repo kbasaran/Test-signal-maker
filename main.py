@@ -1123,14 +1123,14 @@ class Settings:
         self.settings_sys = qtc.QSettings(
             self.author_short, settings_storage_title)
         self.read_all_from_registry()
-
+        self._field_types = {field.name: field.type for field in fields(self)}
+        
     def update(self, attr_name, new_val):
-        if not new_val:
-            return
-        elif type(getattr(self, attr_name)) != type(new_val):
-            logger.warning(f"Settings.update: Received value type {type(new_val)} does not match the original type {type(getattr(self, attr_name))}"
-                            f"\nValue: {new_val}")
-
+        # Update a given setting
+        # Check type of new_val first
+        expected_type = self._field_types[attr_name]
+        if type(new_val) != expected_type:
+            raise TypeError(f"Incorrect data type received for setting '{attr_name}'. Expected type: {expected_type}. Received type/value: {type(new_val)}/{new_val}.")
         setattr(self, attr_name, new_val)
         self.settings_sys.setValue(attr_name, getattr(self, attr_name))
 
