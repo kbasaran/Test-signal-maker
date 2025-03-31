@@ -1935,7 +1935,7 @@ class MainWindow(qtw.QMainWindow):
                                                             f"Audio files ({file_formats})",
                                                             )[0]
                 if file_raw and (file := Path(file_raw)).is_file():
-                    settings.update("file_folder", file.parent)
+                    settings.update("file_folder", str(file.parent))
                     self.request_generator_import_file.emit(str(file))
                 else:
                     self.gen_signal_not_ready.emit("No file chosen.")
