@@ -1348,7 +1348,10 @@ class MainWindow(qtw.QMainWindow):
     
         # Main UI code goes here
         self.setMinimumWidth(1024)
-        self.setWindowTitle(app_definitions["app_name"])
+        self.setWindowTitle(" - ".join(
+            (app_definitions["app_name"],
+             app_definitions["version"])
+            ))
 
         # ---- 'Generate' tab
         signal_type_selector = qtw.QComboBox()
