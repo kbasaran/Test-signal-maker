@@ -1,7 +1,8 @@
 sweep state variables - make into a dictionary maybe?
 log_output_signal crashes at startup
 clicking on stop in linux - some zero padding????
-corrupted settings is not handled well - system gain pop-up can crash
+corrupted settings is not handled well - system gain pop-up can crash, if sound card does not have the selected number of channels, app can crash at start-up.
+ASIO doesn't seem to work anymore'
 use new FS detection function from signal tools
 make pixel dimensions relative to font
 show player and generator statuses at start
