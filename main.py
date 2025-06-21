@@ -401,18 +401,15 @@ class Player(qtc.QObject):
                            }
         self.log_output_signal = False  # logs channel 1 and plot it for debugging
 
-        # define the sound device based on settings and availability
-        self.find_right_sound_device()
-        
         # Inititate attributes
         self._sweep_voltage = 0
         self._sweep_channel = 0
         
-        # start default stream
-        self._create_stream()
+        # initiate stream
+        self.initiate_stream()
 
-    def _create_stream(self, force_sample_rate=None):
-        """Prepare the stream object with provided settings"""
+    def initiate_stream(self, force_sample_rate=None):
+        "Prepare the stream object with provided settings. Does not start it."
 
         # Close any existing stream
         if hasattr(self, "stream"):
@@ -423,13 +420,16 @@ class Player(qtc.QObject):
         
         sample_rate = force_sample_rate if force_sample_rate else settings.play_sample_rate
         
+        # define the sound device based on settings and availability
+        play_device_idx = self.get_right_sound_device()
+        
         try: 
             stream_latency = float(settings.stream_latency)  # for values in s
         except ValueError:
             stream_latency = str(settings.stream_latency)  # for 'high' and 'low'
 
         self.stream = sd.OutputStream(callback=self.callback,
-                                      device=self.play_device_idx,
+                                      device=play_device_idx,
                                       finished_callback=self.announce_callback_is_finished,
                                       samplerate=sample_rate,
                                       channels=settings.channel_count,
@@ -471,7 +471,8 @@ class Player(qtc.QObject):
         
         logger.info("Callback stopped.")
 
-    def find_right_sound_device(self):
+    def get_right_sound_device(self) -> int:
+        "Returns the preferred play sound device index."
         preferred_device_name = settings.preferred_device
         device_name_to_index = {}
         for device in sd.query_devices():
@@ -480,7 +481,8 @@ class Player(qtc.QObject):
             data_name = hostapi_name + " - " + device_name
             device_name_to_index[data_name] = device["index"]
 
-        self.play_device_idx = device_name_to_index.get(preferred_device_name, sd.default.device[1])
+        play_device_idx = device_name_to_index.get(preferred_device_name, sd.default.device[1])
+        return play_device_idx
         # 0 is the recording device, 1 is playback
         # sd.default.device returns (int, int)
 
@@ -493,8 +495,8 @@ class Player(qtc.QObject):
             # if not self.stream.active:  # if stream is not active
                 # sd._terminate()
                 # sd._initialize()
-            self.find_right_sound_device()
-            play_device_info = sd.query_devices(self.play_device_idx)
+            play_device_idx = self.get_right_sound_device()
+            play_device_info = sd.query_devices(play_device_idx)
             # this doesn't update when default sound device is changed in operating system :(
             # thus the trick above
             play_device_summary = f"""Device name: {play_device_info['name']}
@@ -902,7 +904,7 @@ class Player(qtc.QObject):
             
             # If no active stream or a ugs stream ongoing
             if not self.stream.active or self.play_pos:
-                self._create_stream()
+                self.initiate_stream()
                 self.stream.start()
                 logger.info("Sweep stream started.")
 
@@ -917,6 +919,12 @@ class Player(qtc.QObject):
         try:
             # Make sure stream is stopped first
             self.stop_play_blocking()
+            
+            # Initiate a stream
+            if self.stream.samplerate == play_kwargs["signal_object"].FS:
+                self.initiate_stream()
+            else:
+                self.initiate_stream(force_sample_rate=play_kwargs["signal_object"].FS)
 
             self.user_gen_signal = play_kwargs["signal_object"]
             self.set_ugs_play_levels(play_kwargs["requested_voltages"])
@@ -946,6 +954,7 @@ class Player(qtc.QObject):
                     status_info_text += (
                         f"\n\nChannel {cn}:\nMuted."
                     )
+
                     
             # ---- Stop timer
             if self.stop_after_seconds > 0:
@@ -954,11 +963,6 @@ class Player(qtc.QObject):
                 self.play_stopped.connect(self.stop_timer.stop)
                 qtw.QApplication.instance().aboutToQuit.connect(self.stop_timer.stop)
                 self.stop_timer.start()
-
-            if play_kwargs["signal_object"].FS == settings.play_sample_rate:
-                self._create_stream()
-            else:
-                self._create_stream(force_sample_rate=play_kwargs["signal_object"].FS)
 
             self.stream.start()
             self.play_started.emit(status_info_text)

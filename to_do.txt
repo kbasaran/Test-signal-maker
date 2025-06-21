@@ -7,3 +7,6 @@ use new FS detection function from signal tools
 make pixel dimensions relative to font
 show player and generator statuses at start
 on fresh start, when you generate, play and then interrupt it with sweeping, you get a "missing variable initial_rms" error
+enable ASIO env. variable
+error handling for failed initiate stream
+check play settings in sounddevice at stream initiation
