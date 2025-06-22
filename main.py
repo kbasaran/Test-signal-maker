@@ -405,39 +405,60 @@ class Player(qtc.QObject):
         self._sweep_voltage = 0
         self._sweep_channel = 0
         
-        # initiate stream
-        self.initiate_stream()
+        err_message = self.initiate_stream()
+        if err_message:
+            PopupError(err_message)
 
-    def initiate_stream(self, force_sample_rate=None):
+
+    def initiate_stream(self, force_sample_rate=None) -> str:
         "Prepare the stream object with provided settings. Does not start it."
+        "Returns error message if initiation fails."
 
         # Close any existing stream
-        if hasattr(self, "stream"):
+        if hasattr(self, "stream") and self.stream is not None:
             self.stop_play_blocking()
             self.stream.close()
-
+        
+        # target settings
         self._bring_sweep_states_to_zero(settings.channel_count)
-        
         sample_rate = force_sample_rate if force_sample_rate else settings.play_sample_rate
-        
-        # define the sound device based on settings and availability
-        play_device_idx = self.get_right_sound_device()
-        
+        self.ugs_play_stopwatch = -1.
         try: 
             stream_latency = float(settings.stream_latency)  # for values in s
         except ValueError:
             stream_latency = str(settings.stream_latency)  # for 'high' and 'low'
+        
+        # define the sound device based on settings and availability
+        play_device_idx = self.get_right_sound_device()
+        
+        # check if settings are valid
+        output_settings = {
+                            "device": play_device_idx,
+                            "samplerate": sample_rate,
+                            "channels": settings.channel_count,
+                        }
 
-        self.stream = sd.OutputStream(callback=self.callback,
-                                      device=play_device_idx,
-                                      finished_callback=self.announce_callback_is_finished,
-                                      samplerate=sample_rate,
-                                      channels=settings.channel_count,
-                                      latency=stream_latency,
-                                      )
-        self.fade_window_size = int(self.stream.samplerate // 20)
+        try:
+            # sd.check_output_settings(**output_settings)
+            self.stream = sd.OutputStream(callback=self.callback,
+                                          finished_callback= self.announce_callback_is_finished,
+                                          latency= stream_latency,
+                                          **output_settings,
+                                          )
+            
+            # a parameter
+            self.fade_window_size = int(self.stream.samplerate // 20)
 
-        self.ugs_play_stopwatch = -1.
+        except Exception as e:
+            self.stream = None
+            # PopupError(
+            #             "Unable to intiate audio stream.",
+            #             informative_text="Please check your device and the number of channels. This is the most likely reason for this error.",
+            #             post_action=None,
+            #             title="Error",
+            #             )
+            return "Unable to initilize audio stream. Please check your device and the number of channels settings."
+
 
     def reset_fade_out(self):
         self.fade_out_frames = {"remaining": np.nan,
@@ -901,17 +922,25 @@ class Player(qtc.QObject):
             self.user_req_omega, self.user_req_alpha = target_omega, alpha
 
             # the voltage is being set separetely with a signal and slot "set_sweep_level"
-            
+
             # If no active stream or a ugs stream ongoing
-            if not self.stream.active or self.play_pos:
-                self.initiate_stream()
-                self.stream.start()
-                logger.info("Sweep stream started.")
+            if (self.stream and not self.stream.active) or self.play_pos:
+                err_message = self.initiate_stream()
+                if err_message:
+                    self.signal_exception.emit(err_message)
+                    
+                else:
+                    self.stream.start()
+                    logger.info("Sweep stream started.")
+            
+            else:
+                self.signal_exception.emit("Stream not available. Sweep could not start.")
 
         except Exception as e:
             self.signal_exception.emit(str(e))
             logger.critical(f"Sweep generator failed. {e}")
-            self.stream.close(ignore_errors=True)
+            if self.stream is not None:
+                self.stream.close(ignore_errors=True)
 
     @qtc.Slot(dict, dict)
     def ugs_play(self, play_kwargs):
@@ -921,10 +950,14 @@ class Player(qtc.QObject):
             self.stop_play_blocking()
             
             # Initiate a stream
-            if self.stream.samplerate == play_kwargs["signal_object"].FS:
-                self.initiate_stream()
+            if self.stream is not None and self.stream.samplerate == play_kwargs["signal_object"].FS:
+                err_message = self.initiate_stream()
             else:
-                self.initiate_stream(force_sample_rate=play_kwargs["signal_object"].FS)
+                err_message = self.initiate_stream(force_sample_rate=play_kwargs["signal_object"].FS)
+            
+            if err_message:
+                self.signal_exception.emit(err_message)
+                return
 
             self.user_gen_signal = play_kwargs["signal_object"]
             self.set_ugs_play_levels(play_kwargs["requested_voltages"])
@@ -972,11 +1005,12 @@ class Player(qtc.QObject):
         except Exception as e:
             self.signal_exception.emit(repr(e))
             logger.error(f"Play_once failed during start. {e}")
-            self.stream.close(ignore_errors=True)
+            if self.stream is not None:
+                self.stream.close(ignore_errors=True)
 
     @qtc.Slot(str)
     def stop_play(self):
-        if self.stream.active:
+        if self.stream is not None and self.stream.active:
             if np.isnan(self.fade_out_frames["remaining"]):
                 self.fade_out_frames = {"remaining": self.fade_window_size,
                                         "total": self.fade_window_size,
@@ -992,7 +1026,7 @@ class Player(qtc.QObject):
     def stop_play_blocking(self):
         self.stop_play()
         # Block until
-        while self.stream.active:
+        while self.stream is not None and self.stream.active:
             pass
 
     @qtc.Slot(float)
