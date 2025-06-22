@@ -41,7 +41,11 @@ from PySide6 import QtWidgets as qtw
 from PySide6 import QtCore as qtc
 from PySide6 import QtGui as qtg
 
+# Set environment variable before importing sounddevice. Value is not important.
+os.environ["SD_ENABLE_ASIO"] = "1"
+# https://python-sounddevice.readthedocs.io/en/latest/installation.html#asio-support
 import sounddevice as sd  # https://python-sounddevice.readthedocs.io
+
 import numpy as np
 import soundfile as sf  # https://python-soundfile.readthedocs.io/
 from scipy import signal

@@ -5,5 +5,4 @@ corrupted settings is not handled well - system gain pop-up can crash, if sound 
 use new FS detection function from signal tools
 make pixel dimensions relative to font
 show player and generator statuses at start
-enable ASIO env. variable
 error handling of failed play or sweep due to missing stream.
