@@ -1349,37 +1349,45 @@ class MainWindow(qtw.QMainWindow):
         self.handler_generator_signal_not_ready(error_text)
         PopupError(error_text, informative_text)
         self.generate_group.setEnabled(True)
-        
 
-    def make_connections_and_start_threads(self):
-        self.update_signal_info_widget.connect(self.signal_info_widget.setText)
-        self.update_play_info_widget.connect(self.play_info_widget.setPlainText)
-        
-        # Generator signals
-        self.gen_signal_not_ready.connect(self.handler_generator_signal_not_ready)
-        self.generator.signal_ready.connect(self.handler_generator_signal_ready)
-        self.generator.signal_not_ready.connect(self.handler_generator_signal_not_ready)
-        self.generator.file_import_success.connect(self.handle_generator_file_imported_with_success)
-        self.generator.exception.connect(self.handler_generator_exception)
-        
-        # Generator slots
-        self.request_generator_generate_ugs.connect(self.generator.generate_ugs)
-        self.request_generator_process_imported_file.connect(self.generator.process_imported_file)
-        self.request_generator_import_file.connect(self.generator.import_file)
-        self.request_generator_clear_imported_file.connect(self.generator.clear_imported_file)
 
-        # Cleaning threads on exit
-        qtw.QApplication.instance().aboutToQuit.connect(self.player_thread.quit)
-        qtw.QApplication.instance().aboutToQuit.connect(self.generator_thread.quit)
+    class Filter():
+        def __init__(self, parent):
+            super().__init__()
+            self.widgets = {"type": qtw.QComboBox(),
+                            "frequency": qtw.QSpinBox(Minimum=1,
+                                                      Maximum=999999,
+                                                      Value=1000,
+                                                      ),
+                            "order": qtw.QComboBox(),
+                            }
+            self.widgets["frequency"].valueChanged.connect(parent.gen_parameters_changed)
+            for i in [1, 2, 4]:
+                self.widgets["order"].addItem(str(i), i)
+            self.widgets["order"].setCurrentIndex(1)
+            self.widgets["order"].currentTextChanged.connect(parent.gen_parameters_changed)
+
+            # self.widgets["type"].addItems(["Disabled",
+            #                                "HP (zero phase)",
+            #                                "LP (zero phase)",
+            #                                "HP",
+            #                                "LP",
+            #                                ])
+            # disabled zero phase due to bug. issue open in GitHub:
+            # https://github.com/python-acoustics/python-acoustics/issues/240
+
+            self.widgets["type"].addItems(["Disabled", "HP", "LP"])
+            self.widgets["type"].currentTextChanged.connect(parent.gen_parameters_changed)
+            self.layout = qtw.QHBoxLayout()
+
+            for widget in self.widgets.values():
+                self.layout.addWidget(widget)
         
-        # Start threads
-        self.generator_thread.start(qtc.QThread.LowPriority)
-        logging.debug(f"Generator thread id: {self.generator_thread.currentThread()}")
-        
-        self.player_thread.start(qtc.QThread.TimeCriticalPriority)
-        logging.debug(f"Player thread id: {self.player_thread.currentThread()}")
-        
-        self.setup_poll_sound_devices_thread()
+        def as_dict(self):
+            return {"type": self.widgets["type"].currentText(),
+                    "frequency": self.widgets["frequency"].value(),
+                    "order": self.widgets["order"].currentData(),
+                }
 
     def __init__(self, app):  # is this app thing really necessary?
         """MainWindow constructor"""
@@ -1396,34 +1404,34 @@ class MainWindow(qtw.QMainWindow):
             ))
 
         # ---- 'Generate' tab
-        signal_type_selector = qtw.QComboBox()
+        self.signal_type_selector = qtw.QComboBox()
 
-        signal_type_selector.addItems(["Pink noise",
+        self.signal_type_selector.addItems(["Pink noise",
                                        "White noise",
                                        "IEC 268",
                                        "Sine wave",
                                        "Imported"])
-        signal_type_selector.activated.connect(self.gen_parameters_changed)  # int
+        self.signal_type_selector.activated.connect(self.gen_parameters_changed)  # int
 
-        frequency_widget = qtw.QDoubleSpinBox(Minimum=1,
+        self.frequency_widget = qtw.QDoubleSpinBox(Minimum=1,
                                               Maximum=999999,
                                               Value=500,
                                               Decimals=1,
                                               SingleStep=1,
                                               ToolTip="frequency in Hz",
                                               )
-        frequency_widget.setEnabled(False)
+        self.frequency_widget.setEnabled(False)
 
-        frequency_widget.valueChanged.connect(self.gen_parameters_changed)  # float
+        self.frequency_widget.valueChanged.connect(self.gen_parameters_changed)  # float
 
-        compression_widget = qtw.QDoubleSpinBox(Minimum=-10,
+        self.compression_widget = qtw.QDoubleSpinBox(Minimum=-10,
                                                 Maximum=10,
                                                 SingleStep=0.05,
                                                 )
-        compression_widget.setToolTip("a > 0 is expansion, a = 0 is no change, a < 0 is compression."
+        self.compression_widget.setToolTip("a > 0 is expansion, a = 0 is no change, a < 0 is compression."
                                       "\nTry different values to reach the crest factor that you aim."
                                       )
-        compression_widget.valueChanged.connect(self.gen_parameters_changed)
+        self.compression_widget.valueChanged.connect(self.gen_parameters_changed)
 
         self.duration_widget = qtw.QDoubleSpinBox(Minimum=1,
                                              Maximum=60*10,
@@ -1452,59 +1460,21 @@ class MainWindow(qtw.QMainWindow):
         # Filters
         self.no_of_filters = 8
 
-        class Filter():
-            def __init__(self, parent):
-                super().__init__()
-                self.widgets = {"type": qtw.QComboBox(),
-                                "frequency": qtw.QSpinBox(Minimum=1,
-                                                          Maximum=999999,
-                                                          Value=1000,
-                                                          ),
-                                "order": qtw.QComboBox(),
-                                }
-                self.widgets["frequency"].valueChanged.connect(parent.gen_parameters_changed)
-                for i in [1, 2, 4]:
-                    self.widgets["order"].addItem(str(i), i)
-                self.widgets["order"].setCurrentIndex(1)
-                self.widgets["order"].currentTextChanged.connect(parent.gen_parameters_changed)
-
-                # self.widgets["type"].addItems(["Disabled",
-                #                                "HP (zero phase)",
-                #                                "LP (zero phase)",
-                #                                "HP",
-                #                                "LP",
-                #                                ])
-                # disabled zero phase due to bug. issue open in GitHub:
-                # https://github.com/python-acoustics/python-acoustics/issues/240
-
-                self.widgets["type"].addItems(["Disabled", "HP", "LP"])
-                self.widgets["type"].currentTextChanged.connect(parent.gen_parameters_changed)
-                self.layout = qtw.QHBoxLayout()
-
-                for widget in self.widgets.values():
-                    self.layout.addWidget(widget)
-            
-            def as_dict(self):
-                return {"type": self.widgets["type"].currentText(),
-                        "frequency": self.widgets["frequency"].value(),
-                        "order": self.widgets["order"].currentData(),
-                    }
-
-        filters = [Filter(parent=self) for i in range(self.no_of_filters)]
+        self.filters = [self.Filter(parent=self) for i in range(self.no_of_filters)]
         
         # add a basic HP filter to avoid DC offset
-        filters[0].widgets["type"].setCurrentText("HP")
-        filters[0].widgets["frequency"].setValue(1)
+        self.filters[0].widgets["type"].setCurrentText("HP")
+        self.filters[0].widgets["frequency"].setValue(1)
 
         # Generator parameters form
         gen_form_layout = qtw.QFormLayout()
-        gen_form_layout.addRow("Signal type", signal_type_selector)
-        gen_form_layout.addRow("Frequency", frequency_widget)
+        gen_form_layout.addRow("Signal type", self.signal_type_selector)
+        gen_form_layout.addRow("Frequency", self.frequency_widget)
         gen_form_layout.addRow(pwi.SunkenLine())
         for i in range(self.no_of_filters):
-            gen_form_layout.addRow(f"Filter {i + 1}", filters[i].layout)
+            gen_form_layout.addRow(f"Filter {i + 1}", self.filters[i].layout)
         gen_form_layout.addRow(pwi.SunkenLine())
-        gen_form_layout.addRow("Compression", compression_widget)
+        gen_form_layout.addRow("Compression", self.compression_widget)
         gen_form_layout.addRow(pwi.SunkenLine())
         gen_form_layout.addRow("Duration", self.duration_widget)
         gen_form_layout.addRow("Sample rate", self.sample_rate_selector)
@@ -1528,29 +1498,29 @@ class MainWindow(qtw.QMainWindow):
         sys_gain_adjust_button = qtw.QPushButton("Define system gain parameters")
 
         # Form for levels
-        level_widgets = {}
+        self.level_widgets = {}
         max_channel_count = int(settings.max_channel_count)
         for i in range(1, max_channel_count + 1):
-            level_widgets[i] = qtw.QDoubleSpinBox(Minimum=0,
+            self.level_widgets[i] = qtw.QDoubleSpinBox(Minimum=0,
                                                   Maximum=999,
                                                   SingleStep=0.1,
                                                   Value=0,
                                                   ToolTip="\n".join(["in Vrms, requested output voltage."])
                                                   )
-            level_widgets[i].valueChanged.connect(self.play_parameters_changed)
+            self.level_widgets[i].valueChanged.connect(self.play_parameters_changed)
 
-        speaker_nominal_impedance_widget = qtw.QDoubleSpinBox(Minimum=0.01,
+        self.speaker_nominal_impedance_widget = qtw.QDoubleSpinBox(Minimum=0.01,
                                                               Maximum=999,
                                                               SingleStep=0.1,
                                                               Value=4,
                                                               ToolTip="in ohms")
 
-        speaker_nominal_power_widget = qtw.QLabel()
+        self.speaker_nominal_power_widget = qtw.QLabel()
 
-        play_in_loop_widget = qtw.QCheckBox(checked=True)
-        play_in_loop_widget.stateChanged.connect(self.play_parameters_changed)
+        self.play_in_loop_widget = qtw.QCheckBox(checked=True)
+        self.play_in_loop_widget.stateChanged.connect(self.play_parameters_changed)
 
-        stop_after_widget = qtw.QDoubleSpinBox(Minimum=0,
+        self.stop_after_widget = qtw.QDoubleSpinBox(Minimum=0,
                                                 Value=0,
                                                 Decimals=1,
                                                 SingleStep=30,
@@ -1558,7 +1528,7 @@ class MainWindow(qtw.QMainWindow):
                                                          " is passed. Value is in minutes. '0' means disabled."
                                                          ),
                                                 )
-        stop_after_widget.valueChanged.connect(self.play_parameters_changed)
+        self.stop_after_widget.valueChanged.connect(self.play_parameters_changed)
 
         # Player parameters form
         player_params_widget = qtw.QWidget()
@@ -1571,14 +1541,14 @@ class MainWindow(qtw.QMainWindow):
                                                      FrameShadow=qtw.QFrame.Sunken),
                                           )
 
-        for i in level_widgets.keys():
-            play_params_form_layout.addRow(f"Output voltage for Ch. {i}", level_widgets[i])
+        for i in self.level_widgets.keys():
+            play_params_form_layout.addRow(f"Output voltage for Ch. {i}", self.level_widgets[i])
         play_params_form_layout.addRow(pwi.SunkenLine())
-        play_params_form_layout.addRow("Play in loop", play_in_loop_widget)
-        play_params_form_layout.addRow("Stop after (minutes)", stop_after_widget)
+        play_params_form_layout.addRow("Play in loop", self.play_in_loop_widget)
+        play_params_form_layout.addRow("Stop after (minutes)", self.stop_after_widget)
         play_params_form_layout.addRow(pwi.SunkenLine())
-        play_params_form_layout.addRow("Speaker nominal impedance", speaker_nominal_impedance_widget)
-        play_params_form_layout.addRow("Nominal power at speaker", speaker_nominal_power_widget)
+        play_params_form_layout.addRow("Speaker nominal impedance", self.speaker_nominal_impedance_widget)
+        play_params_form_layout.addRow("Nominal power at speaker", self.speaker_nominal_power_widget)
 
         # Buttons
         play_button = qtw.QPushButton("Play",
@@ -1658,7 +1628,7 @@ class MainWindow(qtw.QMainWindow):
 
         sweep_channel_label = qtw.QLabel("Channel")
         sweep_channel_label.setSizePolicy(qtw.QSizePolicy.Preferred, qtw.QSizePolicy.Maximum)
-        sweep_channel = qtw.QSpinBox(Maximum=int(settings.channel_count),
+        self.sweep_channel = qtw.QSpinBox(Maximum=int(settings.channel_count),
                                      Font=qtg.QFont("AnyStyle", 18),
                                      Minimum=1,
                                      )
@@ -1688,7 +1658,7 @@ class MainWindow(qtw.QMainWindow):
         other_settings_section.addWidget(voltage_spin_box, 5, alignment=qtc.Qt.AlignHCenter)
         other_settings_section.addStretch(1)
         other_settings_section.addWidget(sweep_channel_label, 0, alignment=qtc.Qt.AlignHCenter)
-        other_settings_section.addWidget(sweep_channel, 5, alignment=qtc.Qt.AlignHCenter)
+        other_settings_section.addWidget(self.sweep_channel, 5, alignment=qtc.Qt.AlignHCenter)
         other_settings_section.addStretch(1)
         other_settings_section.addWidget(sweep_stop_button, 5, alignment=qtc.Qt.AlignHCenter)
 
@@ -1724,7 +1694,7 @@ class MainWindow(qtw.QMainWindow):
         # vorbis ogg removed. it was causing crash with cx_freeze.
 
         # File write info
-        write_file_info_widget = qtw.QTextEdit(readOnly=True,
+        self.write_file_info_widget = qtw.QTextEdit(readOnly=True,
                                                Text="Inactive")
 
         # Write file parameters form
@@ -1749,7 +1719,7 @@ class MainWindow(qtw.QMainWindow):
         write_file_group_layout.addSpacing(10)
         write_file_group_layout.addWidget(qtw.QLabel("<b>File Writer</b>"),
                                           alignment=qtc.Qt.AlignHCenter)
-        write_file_group_layout.addWidget(write_file_info_widget)
+        write_file_group_layout.addWidget(self.write_file_info_widget)
         write_file_group_layout.addSpacing(10)
         write_file_group_layout.addWidget(write_file_button)
 
@@ -1844,209 +1814,32 @@ class MainWindow(qtw.QMainWindow):
                                          )
         mw_center_layout.addWidget(mw_center_separator)
         mw_center_layout.addWidget(mw_right_widget)
+        
+        self.sys_parameters_changed.connect(self.sys_parameters_changed_actions)
+    
+        self.make_connections_and_start_threads()
 
-
-        # ---- Functions triggered by user through the GUI
-        def gain_and_levels_button_clicked():
-            self.player.stop_play()
-            self.player.poll_sound_devices()
-            sys_gain_widget = SysGainAndLevelsPopup()
-            sys_gain_widget.user_changed_sys_params_signal.connect(self.sys_parameters_changed)
-            sys_gain_widget.exec()
-
-        def play_clicked():
-            if not hasattr(self, "generated_signal") or not isinstance(self.generated_signal, TestSignal):
-                error_text = "No signal found to play."
-                informative_text = "Generate a signal using the generator tab."
-                PopupError(error_text, informative_text)
-                return
-
-            else:
-                # Params to play signal
-                requested_voltages = \
-                    {n_c: level_widgets[n_c].value() for n_c in range(1, settings.channel_count + 1)}
-
-                play_kwargs = {
-                    "signal_object": self.generated_signal,
-                    "loop": play_in_loop_widget.checkState(),
-                    "requested_voltages": requested_voltages,
-                    "stop_after_seconds": stop_after_widget.value() * 60,
-                    }
-
-                self.player.ugs_play(play_kwargs)
-
-        def generate_clicked():
-            try:
-                # Make the signal
-                sig_type = signal_type_selector.currentText()
-                kwargs = {"filters": [filter.as_dict() for filter in filters],
-                          "frequency": frequency_widget.value(),
-                          "compression": compression_widget.value(),
-                          "T": self.duration_widget.value(),
-                          "FS": self.sample_rate_selector.currentData(),
-                          }
-                self.generate_group.setEnabled(False)
-                if sig_type == "Imported":
-                    self.request_generator_process_imported_file.emit("Reuse existing", kwargs)
-                else:
-                    self.request_generator_generate_ugs.emit(sig_type, kwargs)
-                    
-            except Exception as e:
-                error_text = "Unable to place generator request in the generator thread."
-                logger.critical(str(e))
-                PopupError(error_text, str(e))
-                self.generate_group.setEnabled(True)
-
-        def write_file_clicked():
-            if not self.generated_signal:
-                error_text = "No signal found to write."
-                informative_text = "Generate a signal using the generator tab."
-                PopupError(error_text, informative_text)
-                return
-            write_args = {"file_format": self.file_format_widget.currentText(),
-                          "file_rms": 10**(self.file_rms_db_widget.value() / 20) * self.file_rms_multiplier_widget.value(),
-                          }
-            if write_args["file_rms"] * self.generated_signal.CF > 1:
-                error_text = "Current settings will cause digital clipping."
-                informative_text = "Reduce target RMS voltage and/or signal crest factor.\nMake sure system gain is entered correctly and increase amplifier gain if necessary."
-                PopupError(error_text, informative_text)
-                return
-
-            self.player.stop_play()
-            file_filters = {"FLAC": "FLAC files (*.flac)",
-                            "WAV": "Wave files (*.wav)",
-                            "OGG": "Vorbis files (*.ogg)",
-                            }
-            
-            # add functionality for remembering latest file_folder
-            file_folder = Path(settings.file_folder)
-            if not file_folder.is_dir():
-                file_folder = Path.cwd()
-            
-            path_unverified = qtw.QFileDialog.getSaveFileName(None, "Save audio signal in file...",
-                                                                      str(file_folder),
-                                                                      file_filters[write_args["file_format"]],
-                                                                      "",
-                                                                      )
-            
-            try:
-                file_raw = path_unverified[0]
-                if file_raw:
-                    file = Path(file_raw)
-                    assert file.parent.exists()
-                    settings.update("file_folder", str(file.parent))
-                    # is this app thing really necessary? why not use qtw.QApplication.instance()
-                    # in Nautilus the filenames come without suffixes. therefore added below line.
-                    write_args["file_name"] = Path(str(file) + "." + write_args["file_format"].lower() if str(file)[-3:].lower() != write_args["file_format"][-3:].lower() else str(file))
-                    writer = FileWriter(app, self.generated_signal, **write_args)
-                    writer.file_write_successful.connect(write_file_info_widget.setText)
-                    writer.file_write_busy.connect(write_file_info_widget.setText)
-                    writer.file_write_fail.connect(write_file_info_widget.setText)
-                    writer.finished.connect(lambda: logger.debug("Finished thread file writer"))
-                    writer.start()
-                else:
-                    logger.debug("Save file selection canceled or invalid save file.")
-                    write_file_info_widget.setText("Invalid or empty save file.")
-                
-            except Exception as e:
-                error_text = "File writer failed."
-                PopupError(error_text, str(e))
-
-        def choose_import_file():
-            try:
-                self.player.stop_play()
-
-                # Wait if playback is going on. This call does file access and can cause
-                # buffer underrun in player callback
-                for timer in range(10):
-                    if self.player.stream.active:
-                        qtc.QThread.msleep(100)
-                    if timer == 99:
-                        raise RuntimeError("Could not stop player thread.")
-                    else:
-                        qtc.QThread.msleep(100)
-                        break
-
-                # add functionality for remembering latest file_folder
-                file_folder = Path(settings.file_folder)
-                if not file_folder.is_dir():
-                    file_folder = Path.cwd()
-
-                # ask user to pick file
-                file_formats = " ".join(["*." + str(suffix).lower() for suffix in sf.available_formats()])
-                file_raw = qtw.QFileDialog.getOpenFileName(None,
-                                                            "Choose audio file to import...",
-                                                            str(file_folder),
-                                                            f"Audio files ({file_formats})",
-                                                            )[0]
-                if file_raw and (file := Path(file_raw)).is_file():
-                    settings.update("file_folder", str(file.parent))
-                    self.request_generator_import_file.emit(str(file))
-                else:
-                    self.gen_signal_not_ready.emit("No file chosen.")
-                    self.request_generator_clear_imported_file.emit()
-
-            except Exception as e:
-                error_text = "File import failed."
-                PopupError(error_text, str(e))
-                settings.update("file_folder", "")
-
-        def request_sweep(dial_value):
-            f_start = 10
-            f_end = 2e4
-            dial_max_value = 4095
-            # freq(dial_value) = 10**(k * dial_value - m)
-            try:
-                if dial_value == 0:
-                    freq_on_dial = 0
-                else:
-                    k = np.log10(f_end / f_start) / (dial_max_value - 1)
-                    m = np.log10(1 / f_start)
-                    freq_on_dial = 10**(k * (dial_value - 1) - m)
-                self.player.sweep_play(target_freq=freq_on_dial)
-
-            except Exception as e:
-                error_text = "Unable to place sweep generate request in the player thread."
-                logger.critical(repr(e))
-                PopupError(error_text, repr(e))
-
-        # User changed generator signal type
-        def signal_type_selection_changed():
-            self.duration_widget.setEnabled(signal_type_selector.currentText() != "Imported")
-
-            if signal_type_selector.currentText() == "Imported":
-                choose_import_file()
-        signal_type_selector.activated.connect(signal_type_selection_changed)
-
-        # Disabling voltage widgets for disabled channels
-        def update_gui_for_change_in_number_of_channels():
-            sweep_channel.setMaximum(int(settings.channel_count))
-            for i, level_widget in level_widgets.items():
-                level_widget.setEnabled(i <= int(settings.channel_count))
-        update_gui_for_change_in_number_of_channels()
+    def make_connections_and_start_threads(self):
+        self.update_signal_info_widget.connect(self.signal_info_widget.setText)
+        self.update_play_info_widget.connect(self.play_info_widget.setPlainText)
+        self.signal_type_selector.activated.connect(self.signal_type_selection_changed)
+        
+        self.update_gui_for_change_in_number_of_channels()
 
         # Disable frequency widget when sine is not selected
-        signal_type_selector.currentIndexChanged.connect(
-            lambda: frequency_widget.setEnabled(
-                signal_type_selector.currentIndex() == 3))
+        self.signal_type_selector.currentIndexChanged.connect(
+            lambda: self.frequency_widget.setEnabled(
+                self.signal_type_selector.currentIndex() == 3))
 
         # Give a crest factor warning when IEC signal is selected
-        signal_type_selector.currentIndexChanged.connect(
-            lambda: PopupError("IEC 268", "Apply a compression of\nabout -3 to get a crest\nfactor of 2.", title="Warning") if signal_type_selector.currentIndex() == 2 else None)
-
-        # Show speaker nominal powers
-        def show_nominal_speaker_power():
-            values = [widget.value()**2 / speaker_nominal_impedance_widget.value()
-                      for widget in level_widgets.values() if widget.isEnabled() is True]
-            speaker_nominal_power_widget.setText(" / ".join([f"{value:.3g} W" for value in values]))
-
-        for widget in level_widgets.values():
-            widget.valueChanged.connect(show_nominal_speaker_power)
-        show_nominal_speaker_power()
-
-        speaker_nominal_impedance_widget.valueChanged.connect(show_nominal_speaker_power)
-        self.play_parameters_changed.connect(show_nominal_speaker_power)
-
+        self.signal_type_selector.currentIndexChanged.connect(
+            lambda: PopupError("IEC 268", "Apply a compression of\nabout -3 to get a crest\nfactor of 2.", title="Warning") if self.signal_type_selector.currentIndex() == 2 else None)
+        
+        # Show nominal power
+        for widget in self.level_widgets.values():
+            widget.valueChanged.connect(self.show_nominal_speaker_power)
+        self.show_nominal_speaker_power()
+    
         # Change layout based on chosen tab
         def update_layout_based_on_chosen_tab(current_index):
             if current_index in (3, 4):
@@ -2055,121 +1848,338 @@ class MainWindow(qtw.QMainWindow):
             else:
                 mw_center_separator.show()
                 mw_right_widget.show()
+        
         mw_left_widget.currentChanged.connect(update_layout_based_on_chosen_tab)
-
-        # Functionality for frequency sweep tab
-        freq_dial.valueChanged.connect(request_sweep)
-
-        sweep_channel.valueChanged.connect(self.player.set_sweep_channel, qtc.Qt.QueuedConnection)
-        sweep_channel.valueChanged.emit(sweep_channel.value())
-
-        voltage_spin_box.valueChanged.connect(self.player.set_sweep_level, qtc.Qt.QueuedConnection)
-        voltage_spin_box.valueChanged.emit(voltage_spin_box.value())
-
-        self.player.sweep_generated.connect(freq_display.display, qtc.Qt.QueuedConnection)
-
-        def unavailable_feature():
-            error_text = "Feature not implemented yet."
-            PopupError(error_text)
-
-        # ---- Connection of pushbuttons
-        play_button.clicked.connect(play_clicked)
-        stop_button.clicked.connect(self.player.stop_play)
-        sweep_stop_button.clicked.connect(self.player.stop_play)
-        generate_button.clicked.connect(generate_clicked)
-        sys_gain_adjust_button.clicked.connect(gain_and_levels_button_clicked)
-        sys_gain_adjust_button_2.clicked.connect(gain_and_levels_button_clicked)
-        write_file_button.clicked.connect(write_file_clicked)
-
-        # ---- Functions triggered by threads and logic, not the user
+                
         
-        def update_sweep_info_screen(freq, latency):
-            if np.isnan(freq) and not np.isnan(latency):
-                sweep_status.setText("Muted")
-            elif np.isnan(latency):
-                sweep_status.setText("Stopped")
-            elif all(isinstance(item, float) for item in [freq, latency]):
-                info_text = "Output active"
-                # info_text += f"\nLatency: {int(latency * 1000)}ms"
-                sweep_status.setText(info_text)
-            else:
-                sweep_status.setText("Unknown state")
-        self.player.sweep_generated.connect(update_sweep_info_screen, qtc.Qt.QueuedConnection)
-        self.player.sweep_generator_stopped.connect(lambda: update_sweep_info_screen(0, 0))
+        self.speaker_nominal_impedance_widget.valueChanged.connect(show_nominal_speaker_power)
+        self.play_parameters_changed.connect(show_nominal_speaker_power)
+                
 
-        # Log something through the thread
-        @qtc.Slot(str)
-        def player_log_through_thread(message):
-            self.player_logger.log(f"Player: {message}")
-        self.player.log_through_thread.connect(player_log_through_thread)
-
-        # Logging functionality
-        def show_log(log_dict):
-            log_win = LogView(log_dict)
-            log_win.exec()
-        self.player.publish_log.connect(show_log)
-
-        # Output voltage request not feasible
-        def impossible_voltage_request_happened_at_sweeper(str):
-            voltage_spin_box.setValue(0)  # not very user friendly
-        self.player.impossible_voltage_request.connect(impossible_voltage_request_happened_at_sweeper)
-
-        @qtc.Slot(str)
-        def play_stopped(stop_info_text):
-            "User generated signal play stopped"
-            player_params_widget.setEnabled(True)
-            play_button.setEnabled(True)
-            # stop_button.setEnabled(False)
-            self.update_play_info_widget.emit(stop_info_text)
-        self.player.play_stopped.connect(play_stopped)
         
-        @qtc.Slot(Exception)
-        def player_exception(e):
-            error_text = "Error in player."
-            informative_text = str(e)
+        
+        # Generator signals
+        self.gen_signal_not_ready.connect(self.handler_generator_signal_not_ready)
+        self.generator.signal_ready.connect(self.handler_generator_signal_ready)
+        self.generator.signal_not_ready.connect(self.handler_generator_signal_not_ready)
+        self.generator.file_import_success.connect(self.handle_generator_file_imported_with_success)
+        self.generator.exception.connect(self.handler_generator_exception)
+        
+        # Generator slots
+        self.request_generator_generate_ugs.connect(self.generator.generate_ugs)
+        self.request_generator_process_imported_file.connect(self.generator.process_imported_file)
+        self.request_generator_import_file.connect(self.generator.import_file)
+        self.request_generator_clear_imported_file.connect(self.generator.clear_imported_file)
+
+        # Cleaning threads on exit
+        qtw.QApplication.instance().aboutToQuit.connect(self.player_thread.quit)
+        qtw.QApplication.instance().aboutToQuit.connect(self.generator_thread.quit)
+        
+        # Start threads
+        self.generator_thread.start(qtc.QThread.LowPriority)
+        logging.debug(f"Generator thread id: {self.generator_thread.currentThread()}")
+        
+        self.player_thread.start(qtc.QThread.TimeCriticalPriority)
+        logging.debug(f"Player thread id: {self.player_thread.currentThread()}")
+        
+        self.setup_poll_sound_devices_thread()
+
+
+    # ---- Functions triggered by user through the GUI
+    def gain_and_levels_button_clicked(self):
+        self.player.stop_play()
+        self.player.poll_sound_devices()
+        sys_gain_widget = SysGainAndLevelsPopup()
+        sys_gain_widget.user_changed_sys_params_signal.connect(self.sys_parameters_changed)
+        sys_gain_widget.exec()
+
+    def play_clicked(self):
+        if not hasattr(self, "generated_signal") or not isinstance(self.generated_signal, TestSignal):
+            error_text = "No signal found to play."
+            informative_text = "Generate a signal using the generator tab."
             PopupError(error_text, informative_text)
-            play_stopped("Stopped due to error in player.")
+            return
 
-        self.player.signal_exception.connect(player_exception)
+        else:
+            # Params to play signal
+            requested_voltages = \
+                {n_c: self.level_widgets[n_c].value() for n_c in range(1, settings.channel_count + 1)}
 
-        @qtc.Slot(str)
-        def play_started(play_info_text):
-            "User generated signal play started"
-            player_params_widget.setEnabled(False)
-            play_button.setEnabled(False)
-            # stop_button.setEnabled(True)
-            self.update_play_info_widget.emit(play_info_text)
-            
-        self.player.play_started.connect(play_started)
+            play_kwargs = {
+                "signal_object": self.generated_signal,
+                "loop": self.play_in_loop_widget.checkState(),
+                "requested_voltages": requested_voltages,
+                "stop_after_seconds": self.stop_after_widget.value() * 60,
+                }
 
-        @qtc.Slot(str)
-        def gen_parameters_changed(new_param="//"):
-            "When generator parameters changed"
-            if (signal_type_selector.currentText() != "Imported" or
-                    (hasattr(self, "generated_signal") and isinstance(self.generated_signal, TestSignal))):
-                generator_info_text = f'Parameter changed: {new_param}' + \
-                    '\nPress "Generate" to generate signal.'
-                self.gen_signal_not_ready.emit(generator_info_text)
-        self.gen_parameters_changed.connect(gen_parameters_changed)
+            self.player.ugs_play(play_kwargs)
 
-        @qtc.Slot()
-        def play_parameters_changed_actions():
-            "Player tab parameters changed"
-            self.player.stop_play()
-        self.play_parameters_changed.connect(play_parameters_changed_actions)
+    def generate_clicked(self):
+        try:
+            # Make the signal
+            sig_type = self.signal_type_selector.currentText()
+            kwargs = {"filters": [filter.as_dict() for filter in self.filters],
+                      "frequency": self.frequency_widget.value(),
+                      "compression": self.compression_widget.value(),
+                      "T": self.duration_widget.value(),
+                      "FS": self.sample_rate_selector.currentData(),
+                      }
+            self.generate_group.setEnabled(False)
+            if sig_type == "Imported":
+                self.request_generator_process_imported_file.emit("Reuse existing", kwargs)
+            else:
+                self.request_generator_generate_ugs.emit(sig_type, kwargs)
+                
+        except Exception as e:
+            error_text = "Unable to place generator request in the generator thread."
+            logger.critical(str(e))
+            PopupError(error_text, str(e))
+            self.generate_group.setEnabled(True)
 
-        @qtc.Slot()
-        def sys_parameters_changed_actions():
-            "System parameters changed"
-            update_gui_for_change_in_number_of_channels()
-            self.player.set_sweep_level(voltage_spin_box.value())  # due to a bug where the levels are not updated
-            # after system gain settings are changed by user
-            # setting the maximum value for the sweep voltage spin box here would be nice
-            # but it depends on channel so not so simple to do
+    def write_file_clicked(self):
+        if not self.generated_signal:
+            error_text = "No signal found to write."
+            informative_text = "Generate a signal using the generator tab."
+            PopupError(error_text, informative_text)
+            return
+        write_args = {"file_format": self.file_format_widget.currentText(),
+                      "file_rms": 10**(self.file_rms_db_widget.value() / 20) * self.file_rms_multiplier_widget.value(),
+                      }
+        if write_args["file_rms"] * self.generated_signal.CF > 1:
+            error_text = "Current settings will cause digital clipping."
+            informative_text = "Reduce target RMS voltage and/or signal crest factor.\nMake sure system gain is entered correctly and increase amplifier gain if necessary."
+            PopupError(error_text, informative_text)
+            return
 
-        self.sys_parameters_changed.connect(sys_parameters_changed_actions)
+        self.player.stop_play()
+        file_filters = {"FLAC": "FLAC files (*.flac)",
+                        "WAV": "Wave files (*.wav)",
+                        "OGG": "Vorbis files (*.ogg)",
+                        }
         
-        self.make_connections_and_start_threads()
+        # add functionality for remembering latest file_folder
+        file_folder = Path(settings.file_folder)
+        if not file_folder.is_dir():
+            file_folder = Path.cwd()
+        
+        path_unverified = qtw.QFileDialog.getSaveFileName(None, "Save audio signal in file...",
+                                                                  str(file_folder),
+                                                                  file_filters[write_args["file_format"]],
+                                                                  "",
+                                                                  )
+        
+        try:
+            file_raw = path_unverified[0]
+            if file_raw:
+                file = Path(file_raw)
+                assert file.parent.exists()
+                settings.update("file_folder", str(file.parent))
+                # is this app thing really necessary? why not use qtw.QApplication.instance()
+                # in Nautilus the filenames come without suffixes. therefore added below line.
+                write_args["file_name"] = Path(str(file) + "." + write_args["file_format"].lower() if str(file)[-3:].lower() != write_args["file_format"][-3:].lower() else str(file))
+                
+                app = qtw.QApplication.instance()
+                writer = FileWriter(app, self.generated_signal, **write_args)
+                writer.file_write_successful.connect(self.write_file_info_widget.setText)
+                writer.file_write_busy.connect(self.write_file_info_widget.setText)
+                writer.file_write_fail.connect(self.write_file_info_widget.setText)
+                writer.finished.connect(lambda: logger.debug("Finished thread file writer"))
+                writer.start()
+            else:
+                logger.debug("Save file selection canceled or invalid save file.")
+                self.write_file_info_widget.setText("Invalid or empty save file.")
+            
+        except Exception as e:
+            error_text = "File writer failed."
+            PopupError(error_text, str(e))
+
+    def choose_import_file(self):
+        try:
+            self.player.stop_play()
+
+            # Wait if playback is going on. This call does file access and can cause
+            # buffer underrun in player callback
+            for timer in range(10):
+                if self.player.stream.active:
+                    qtc.QThread.msleep(100)
+                if timer == 99:
+                    raise RuntimeError("Could not stop player thread.")
+                else:
+                    qtc.QThread.msleep(100)
+                    break
+
+            # add functionality for remembering latest file_folder
+            file_folder = Path(settings.file_folder)
+            if not file_folder.is_dir():
+                file_folder = Path.cwd()
+
+            # ask user to pick file
+            file_formats = " ".join(["*." + str(suffix).lower() for suffix in sf.available_formats()])
+            file_raw = qtw.QFileDialog.getOpenFileName(None,
+                                                        "Choose audio file to import...",
+                                                        str(file_folder),
+                                                        f"Audio files ({file_formats})",
+                                                        )[0]
+            if file_raw and (file := Path(file_raw)).is_file():
+                settings.update("file_folder", str(file.parent))
+                self.request_generator_import_file.emit(str(file))
+            else:
+                self.gen_signal_not_ready.emit("No file chosen.")
+                self.request_generator_clear_imported_file.emit()
+
+        except Exception as e:
+            error_text = "File import failed."
+            PopupError(error_text, str(e))
+            settings.update("file_folder", "")
+
+    def request_sweep(self, dial_value):
+        f_start = 10
+        f_end = 2e4
+        dial_max_value = 4095
+        # freq(dial_value) = 10**(k * dial_value - m)
+        try:
+            if dial_value == 0:
+                freq_on_dial = 0
+            else:
+                k = np.log10(f_end / f_start) / (dial_max_value - 1)
+                m = np.log10(1 / f_start)
+                freq_on_dial = 10**(k * (dial_value - 1) - m)
+            self.player.sweep_play(target_freq=freq_on_dial)
+
+        except Exception as e:
+            error_text = "Unable to place sweep generate request in the player thread."
+            logger.critical(repr(e))
+            PopupError(error_text, repr(e))
+
+    # User changed generator signal type
+    def signal_type_selection_changed(self):
+        self.duration_widget.setEnabled(self.signal_type_selector.currentText() != "Imported")
+
+        if self.signal_type_selector.currentText() == "Imported":
+            self.choose_import_file()
+
+    # Disabling voltage widgets for disabled channels
+    def update_gui_for_change_in_number_of_channels(self):
+        self.sweep_channel.setMaximum(int(settings.channel_count))
+        for i, level_widget in self.level_widgets.items():
+            level_widget.setEnabled(i <= int(settings.channel_count))
+    
+    # Show speaker nominal powers
+    def show_nominal_speaker_power(self):
+        values = [widget.value()**2 / self.speaker_nominal_impedance_widget.value()
+                  for widget in self.level_widgets.values() if widget.isEnabled() is True]
+        self.speaker_nominal_power_widget.setText(" / ".join([f"{value:.3g} W" for value in values]))
+
+    # Functionality for frequency sweep tab
+    freq_dial.valueChanged.connect(request_sweep)
+
+    self.sweep_channel.valueChanged.connect(self.player.set_sweep_channel, qtc.Qt.QueuedConnection)
+    self.sweep_channel.valueChanged.emit(self.sweep_channel.value())
+
+    voltage_spin_box.valueChanged.connect(self.player.set_sweep_level, qtc.Qt.QueuedConnection)
+    voltage_spin_box.valueChanged.emit(voltage_spin_box.value())
+
+    self.player.sweep_generated.connect(freq_display.display, qtc.Qt.QueuedConnection)
+
+    def unavailable_feature():
+        error_text = "Feature not implemented yet."
+        PopupError(error_text)
+
+    # ---- Connection of pushbuttons
+    play_button.clicked.connect(play_clicked)
+    stop_button.clicked.connect(self.player.stop_play)
+    sweep_stop_button.clicked.connect(self.player.stop_play)
+    generate_button.clicked.connect(generate_clicked)
+    sys_gain_adjust_button.clicked.connect(gain_and_levels_button_clicked)
+    sys_gain_adjust_button_2.clicked.connect(gain_and_levels_button_clicked)
+    write_file_button.clicked.connect(write_file_clicked)
+
+    # ---- Functions triggered by threads and logic, not the user
+    
+    def update_sweep_info_screen(freq, latency):
+        if np.isnan(freq) and not np.isnan(latency):
+            sweep_status.setText("Muted")
+        elif np.isnan(latency):
+            sweep_status.setText("Stopped")
+        elif all(isinstance(item, float) for item in [freq, latency]):
+            info_text = "Output active"
+            # info_text += f"\nLatency: {int(latency * 1000)}ms"
+            sweep_status.setText(info_text)
+        else:
+            sweep_status.setText("Unknown state")
+    self.player.sweep_generated.connect(update_sweep_info_screen, qtc.Qt.QueuedConnection)
+    self.player.sweep_generator_stopped.connect(lambda: update_sweep_info_screen(0, 0))
+
+    # Log something through the thread
+    @qtc.Slot(str)
+    def player_log_through_thread(message):
+        self.player_logger.log(f"Player: {message}")
+    self.player.log_through_thread.connect(player_log_through_thread)
+
+    # Logging functionality
+    def show_log(log_dict):
+        log_win = LogView(log_dict)
+        log_win.exec()
+    self.player.publish_log.connect(show_log)
+
+    # Output voltage request not feasible
+    def impossible_voltage_request_happened_at_sweeper(str):
+        voltage_spin_box.setValue(0)  # not very user friendly
+    self.player.impossible_voltage_request.connect(impossible_voltage_request_happened_at_sweeper)
+
+    @qtc.Slot(str)
+    def play_stopped(stop_info_text):
+        "User generated signal play stopped"
+        player_params_widget.setEnabled(True)
+        play_button.setEnabled(True)
+        # stop_button.setEnabled(False)
+        self.update_play_info_widget.emit(stop_info_text)
+    self.player.play_stopped.connect(play_stopped)
+    
+    @qtc.Slot(Exception)
+    def player_exception(e):
+        error_text = "Error in player."
+        informative_text = str(e)
+        PopupError(error_text, informative_text)
+        play_stopped("Stopped due to error in player.")
+
+    self.player.signal_exception.connect(player_exception)
+
+    @qtc.Slot(str)
+    def play_started(self, play_info_text):
+        "User generated signal play started"
+        player_params_widget.setEnabled(False)
+        play_button.setEnabled(False)
+        # stop_button.setEnabled(True)
+        self.update_play_info_widget.emit(play_info_text)
+        
+    self.player.play_started.connect(play_started)
+
+    @qtc.Slot(str)
+    def gen_parameters_changed(self, new_param="//"):
+        "When generator parameters changed"
+        if (self.signal_type_selector.currentText() != "Imported" or
+                (hasattr(self, "generated_signal") and isinstance(self.generated_signal, TestSignal))):
+            generator_info_text = f'Parameter changed: {new_param}' + \
+                '\nPress "Generate" to generate signal.'
+            self.gen_signal_not_ready.emit(generator_info_text)
+    self.gen_parameters_changed.connect(gen_parameters_changed)
+
+    @qtc.Slot()
+    def play_parameters_changed_actions(self):
+        "Player tab parameters changed"
+        self.player.stop_play()
+    self.play_parameters_changed.connect(play_parameters_changed_actions)
+
+    @qtc.Slot()
+    def sys_parameters_changed_actions(self):
+        "System parameters changed"
+        self.update_gui_for_change_in_number_of_channels()
+        self.player.set_sweep_level(voltage_spin_box.value())  # due to a bug where the levels are not updated
+        # after system gain settings are changed by user
+        # setting the maximum value for the sweep voltage spin box here would be nice
+        # but it depends on channel so not so simple to do
+
 
 
 class MatplotlibWidget(qtw.QWidget):
