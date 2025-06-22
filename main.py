@@ -21,7 +21,7 @@ __email__ = "kbasaran@gmail.com"
 from pathlib import Path
 
 app_definitions = {"app_name": "Test Signal Maker",
-                   "version": "0.3.1",
+                   "version": "0.3.2rc0",
                    # "version": "Test build " + today.strftime("%Y.%m.%d"),
                    "description": "Test Signal Maker - Loudspeaker test signal tool",
                    "copyright": "Copyright (C) 2025 Kerem Basaran",
