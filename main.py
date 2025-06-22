@@ -98,8 +98,8 @@ class FileImportDialog(qtw.QDialog):
 # Popup window for warnings
 class PopupError():
     # https://www.techwithtim.net/tutorials/pyqt5-tutorial/messageboxes/
-    def __init__(self, text, informative_text=None, post_action=None, title="Error"):
-        msg = qtw.QMessageBox()
+    def __init__(self, text, informative_text=None, post_action=None, parent=None, title="Error"):
+        msg = qtw.QMessageBox(parent=parent)
         msg.setWindowTitle(title)
         msg.setText(text)
         # msg.setMinimumWidth(200)  # doesn't work
@@ -461,7 +461,7 @@ class Player(qtc.QObject):
             #             post_action=None,
             #             title="Error",
             #             )
-            return "Unable to initilize audio stream. Please check your device and the number of channels settings."
+            self.signal_exception.emit("Unable to initilize audio stream. Please check your device and the number of channels settings.")
 
 
     def reset_fade_out(self):
@@ -927,15 +927,13 @@ class Player(qtc.QObject):
 
             # the voltage is being set separetely with a signal and slot "set_sweep_level"
 
-            # If no active stream or a ugs stream ongoing
-            if (self.stream and not self.stream.active) or self.play_pos:
-                err_message = self.initiate_stream()
-                if err_message:
-                    self.signal_exception.emit(err_message)
-                    
-                else:
-                    self.stream.start()
-                    logger.info("Sweep stream started.")
+            # If no stream yet, no active sweep stream or an ongoing ugs stream
+            if self.stream is None or not self.stream.active or self.play_pos:
+                self.initiate_stream()
+                
+            if self.stream is not None:    
+                self.stream.start()
+                logger.info("Sweep stream started.")
             
             else:
                 self.signal_exception.emit("Stream not available. Sweep could not start.")
@@ -955,12 +953,12 @@ class Player(qtc.QObject):
             
             # Initiate a stream
             if self.stream is not None and self.stream.samplerate == play_kwargs["signal_object"].FS:
-                err_message = self.initiate_stream()
+                self.initiate_stream()
             else:
-                err_message = self.initiate_stream(force_sample_rate=play_kwargs["signal_object"].FS)
+                self.initiate_stream(force_sample_rate=play_kwargs["signal_object"].FS)
             
-            if err_message:
-                self.signal_exception.emit(err_message)
+            if self.stream is None:    
+                self.signal_exception.emit("Stream not available. Play could not start.")
                 return
 
             self.user_gen_signal = play_kwargs["signal_object"]
@@ -1347,13 +1345,15 @@ class MainWindow(qtw.QMainWindow):
         error_text = "Error in signal generator."
         informative_text = str(e)
         self.handler_generator_signal_not_ready(error_text)
-        PopupError(error_text, informative_text)
+        PopupError(error_text, informative_text=informative_text)
         self.generate_group.setEnabled(True)
         
 
     def make_connections_and_start_threads(self):
         self.update_signal_info_widget.connect(self.signal_info_widget.setText)
         self.update_play_info_widget.connect(self.play_info_widget.setPlainText)
+        self.player.signal_exception.connect(self.player_exception)
+        self.player.play_stopped.connect(self.play_stopped)
         
         # Generator signals
         self.gen_signal_not_ready.connect(self.handler_generator_signal_not_ready)
@@ -1561,10 +1561,10 @@ class MainWindow(qtw.QMainWindow):
         stop_after_widget.valueChanged.connect(self.play_parameters_changed)
 
         # Player parameters form
-        player_params_widget = qtw.QWidget()
+        self.player_params_widget = qtw.QWidget()
         play_params_form_layout = qtw.QFormLayout()
         play_params_form_layout.setContentsMargins(0, 0, 0, 0)
-        player_params_widget.setLayout(play_params_form_layout)
+        self.player_params_widget.setLayout(play_params_form_layout)
 
         play_params_form_layout.addWidget(sys_gain_adjust_button)
         play_params_form_layout.addWidget(qtw.QFrame(FrameShape=qtw.QFrame.HLine,
@@ -1581,14 +1581,14 @@ class MainWindow(qtw.QMainWindow):
         play_params_form_layout.addRow("Nominal power at speaker", speaker_nominal_power_widget)
 
         # Buttons
-        play_button = qtw.QPushButton("Play",
+        self.play_button = qtw.QPushButton("Play",
                                       MinimumHeight=40,
                                       )
         stop_button = qtw.QPushButton("Stop",
                                       MinimumHeight=40,
                                       )
         player_buttons_layout = qtw.QHBoxLayout()
-        player_buttons_layout.addWidget(play_button)
+        player_buttons_layout.addWidget(self.play_button)
         player_buttons_layout.addWidget(stop_button)
 
         # Sound device info
@@ -1600,7 +1600,7 @@ class MainWindow(qtw.QMainWindow):
         player_group.setLayout(play_group_layout)
 
         # Add the widgets, layouts
-        play_group_layout.addWidget(player_params_widget)
+        play_group_layout.addWidget(self.player_params_widget)
         play_group_layout.addWidget(pwi.SunkenLine())
         play_group_layout.addSpacing(10)
         play_group_layout.addWidget(qtw.QLabel("<b>Sound Device Information</b>"),
@@ -1858,7 +1858,7 @@ class MainWindow(qtw.QMainWindow):
             if not hasattr(self, "generated_signal") or not isinstance(self.generated_signal, TestSignal):
                 error_text = "No signal found to play."
                 informative_text = "Generate a signal using the generator tab."
-                PopupError(error_text, informative_text)
+                PopupError(error_text, informative_text=informative_text)
                 return
 
             else:
@@ -1894,14 +1894,14 @@ class MainWindow(qtw.QMainWindow):
             except Exception as e:
                 error_text = "Unable to place generator request in the generator thread."
                 logger.critical(str(e))
-                PopupError(error_text, str(e))
+                PopupError(error_text, informative_text=str(e))
                 self.generate_group.setEnabled(True)
 
         def write_file_clicked():
             if not self.generated_signal:
                 error_text = "No signal found to write."
                 informative_text = "Generate a signal using the generator tab."
-                PopupError(error_text, informative_text)
+                PopupError(error_text, informative_text=informative_text)
                 return
             write_args = {"file_format": self.file_format_widget.currentText(),
                           "file_rms": 10**(self.file_rms_db_widget.value() / 20) * self.file_rms_multiplier_widget.value(),
@@ -1909,7 +1909,7 @@ class MainWindow(qtw.QMainWindow):
             if write_args["file_rms"] * self.generated_signal.CF > 1:
                 error_text = "Current settings will cause digital clipping."
                 informative_text = "Reduce target RMS voltage and/or signal crest factor.\nMake sure system gain is entered correctly and increase amplifier gain if necessary."
-                PopupError(error_text, informative_text)
+                PopupError(error_text, informative_text=informative_text)
                 return
 
             self.player.stop_play()
@@ -1950,7 +1950,7 @@ class MainWindow(qtw.QMainWindow):
                 
             except Exception as e:
                 error_text = "File writer failed."
-                PopupError(error_text, str(e))
+                PopupError(error_text, informative_text=str(e))
 
         def choose_import_file():
             try:
@@ -1988,7 +1988,7 @@ class MainWindow(qtw.QMainWindow):
 
             except Exception as e:
                 error_text = "File import failed."
-                PopupError(error_text, str(e))
+                PopupError(error_text, informative_text=str(e))
                 settings.update("file_folder", "")
 
         def request_sweep(dial_value):
@@ -2008,7 +2008,7 @@ class MainWindow(qtw.QMainWindow):
             except Exception as e:
                 error_text = "Unable to place sweep generate request in the player thread."
                 logger.critical(repr(e))
-                PopupError(error_text, repr(e))
+                PopupError(error_text, informative_text=repr(e))
 
         # User changed generator signal type
         def signal_type_selection_changed():
@@ -2073,7 +2073,7 @@ class MainWindow(qtw.QMainWindow):
             PopupError(error_text)
 
         # ---- Connection of pushbuttons
-        play_button.clicked.connect(play_clicked)
+        self.play_button.clicked.connect(play_clicked)
         stop_button.clicked.connect(self.player.stop_play)
         sweep_stop_button.clicked.connect(self.player.stop_play)
         generate_button.clicked.connect(generate_clicked)
@@ -2115,28 +2115,10 @@ class MainWindow(qtw.QMainWindow):
         self.player.impossible_voltage_request.connect(impossible_voltage_request_happened_at_sweeper)
 
         @qtc.Slot(str)
-        def play_stopped(stop_info_text):
-            "User generated signal play stopped"
-            player_params_widget.setEnabled(True)
-            play_button.setEnabled(True)
-            # stop_button.setEnabled(False)
-            self.update_play_info_widget.emit(stop_info_text)
-        self.player.play_stopped.connect(play_stopped)
-        
-        @qtc.Slot(Exception)
-        def player_exception(e):
-            error_text = "Error in player."
-            informative_text = str(e)
-            PopupError(error_text, informative_text)
-            play_stopped("Stopped due to error in player.")
-
-        self.player.signal_exception.connect(player_exception)
-
-        @qtc.Slot(str)
         def play_started(play_info_text):
             "User generated signal play started"
-            player_params_widget.setEnabled(False)
-            play_button.setEnabled(False)
+            self.player_params_widget.setEnabled(False)
+            self.play_button.setEnabled(False)
             # stop_button.setEnabled(True)
             self.update_play_info_widget.emit(play_info_text)
             
@@ -2170,6 +2152,21 @@ class MainWindow(qtw.QMainWindow):
         self.sys_parameters_changed.connect(sys_parameters_changed_actions)
         
         self.make_connections_and_start_threads()
+        
+    @qtc.Slot(Exception)
+    def player_exception(self, e):
+        error_text = "Error in player."
+        informative_text = str(e)
+        PopupError(error_text, informative_text=informative_text, parent=self)
+        self.play_stopped("Stopped due to error in player.")
+
+    @qtc.Slot(str)
+    def play_stopped(self, stop_info_text):
+        "User generated signal play stopped"
+        self.player_params_widget.setEnabled(True)
+        self.play_button.setEnabled(True)
+        # stop_button.setEnabled(False)
+        self.update_play_info_widget.emit(stop_info_text)
 
 
 class MatplotlibWidget(qtw.QWidget):
