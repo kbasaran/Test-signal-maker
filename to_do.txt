@@ -5,3 +5,4 @@ use new FS detection function from signal tools
 make pixel dimensions relative to font
 show player and generator statuses at start
 do not have slots inside _init_
+update the images used in readme.md
