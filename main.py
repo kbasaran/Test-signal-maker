@@ -16,22 +16,6 @@ __email__ = "kbasaran@gmail.com"
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-# from datetime import date
-# today = date.today()
-from pathlib import Path
-
-app_definitions = {"app_name": "Test Signal Maker",
-                   "version": "0.3.2rc0",
-                   # "version": "Test build " + today.strftime("%Y.%m.%d"),
-                   "description": "Test Signal Maker - Loudspeaker test signal tool",
-                   "copyright": "Copyright (C) 2025 Kerem Basaran",
-                   "icon_path": str(Path("./logo/icon.ico")),
-                   "author": "Kerem Basaran",
-                   "author_short": "kbasaran",
-                   "email": "kbasaran@gmail.com",
-                   "website": "https://github.com/kbasaran",
-                   }
-
 import sys
 import os
 import time
@@ -52,6 +36,10 @@ from scipy import signal
 import copy
 from datetime import datetime
 
+# from datetime import date
+# today = date.today()
+from pathlib import Path
+
 import matplotlib.pyplot as plt  # http://matplotlib.org/
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
@@ -62,6 +50,19 @@ from dataclasses import dataclass, fields
 import logging
 # import multiprocessing
 
+app_definitions = {"app_name": "Test Signal Maker",
+                   "version": "0.3.2",
+                   "description": "Test Signal Maker - Loudspeaker test signal tool",
+                   "copyright": "Copyright (C) 2025 Kerem Basaran",
+                   "icon_path": str(Path("./logo/icon.ico")),
+                   "author": "Kerem Basaran",
+                   "author_short": "kbasaran",
+                   "email": "kbasaran@gmail.com",
+                   "website": "https://github.com/kbasaran",
+                   }
+
+# uncomment for release candidate builds
+app_definitions["version"] += "rc" + time.strftime("%y%m%d", time.localtime())
 
 class FileImportDialog(qtw.QDialog):
 
