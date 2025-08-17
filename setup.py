@@ -9,11 +9,11 @@ from pathlib import Path
 
 # Dependencies are automatically detected, but it might need fine tuning.
 build_exe_options = {
-    "packages": ["numpy"],
+    "packages": ["numpy"],  # necessary stil??
     "include_files": [
         (str(Path("./LICENSE")), str(Path("./LICENSE"))),
         (str(Path("./README.md")), str(Path("./README.md"))),
-	(app_definitions["icon_path"], app_definitions["icon_path"]),
+        (str(Path(app_definitions["icon_path"])), str(Path(app_definitions["icon_path"]))),
         ],
     "silent_level": 1,
 }

@@ -54,7 +54,7 @@ app_definitions = {"app_name": "Test Signal Maker",
                    "version": "0.3.2",
                    "description": "Test Signal Maker - Loudspeaker test signal tool",
                    "copyright": "Copyright (C) 2025 Kerem Basaran",
-                   "icon_path": str(Path("./logo/icon.ico")),
+                   "icon_path": "logo/icon.ico",  # relative posix path
                    "author": "Kerem Basaran",
                    "author_short": "kbasaran",
                    "email": "kbasaran@gmail.com",
@@ -2216,6 +2216,17 @@ class MatplotlibWidget(qtw.QWidget):
         self.update_plot(None, None, None)
 
 
+def get_main_dir():
+    
+    if getattr(sys, 'frozen', False):
+        # The application is frozen
+        return Path(sys.executable).parent
+        
+    else:
+        # The application is not frozen
+        return Path(__file__).parent
+
+
 def parse_args(app_definitions):
     import argparse
 
@@ -2272,7 +2283,8 @@ def main():
     qapp = qtw.QApplication.instance()
     if not qapp:
         qapp = qtw.QApplication(sys.argv)
-        qapp.setWindowIcon(qtg.QIcon(app_definitions["icon_path"]))
+        icon_path = str(get_main_dir().joinpath(app_definitions["icon_path"]))
+        qapp.setWindowIcon(qtg.QIcon(icon_path))
     mw = MainWindow(qapp)
     mw.show()
     qapp.exec()
