@@ -620,14 +620,6 @@ class Player(qtc.QObject):
         omega_last = omega_end
         return mono_signal_chunk, theta_last, omega_last
 
-    def calculate_exp_sweep_with_acceleration():
-        """
-        Calculate an exponential sine sweep with user defined acceleration.
-        Returns a tuple with,
-        one channel array of theta, last value of theta, last value of omega
-        """
-        pass
-
     def callback_for_ugs(self, frames):
         "We are doing a callback for streaming an already generated signal"
         stream_needs_to_stop_now = False
@@ -2280,14 +2272,15 @@ def main():
     logger = setup_logging(args=args)
     settings = Settings(app_definitions["app_name"])
 
-    qapp = qtw.QApplication.instance()
-    if not qapp:
-        qapp = qtw.QApplication(sys.argv)
+    # ---- Create QApplication
+    if not (app := qtw.QApplication.instance()):
+        app = qtw.QApplication(sys.argv)
         icon_path = str(get_main_dir().joinpath(app_definitions["icon_path"]))
-        qapp.setWindowIcon(qtg.QIcon(icon_path))
-    mw = MainWindow(qapp)
+        app.setWindowIcon(qtg.QIcon(icon_path))
+    mw = MainWindow(app)
+
     mw.show()
-    qapp.exec()
+    app.exec()
 
 
 if __name__ == "__main__":
