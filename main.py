@@ -611,10 +611,14 @@ class Player(qtc.QObject):
         Returns a tuple with,
         one channel array of theta, last value of theta, last value of omega
         """
-        T = t_array[-1]
-        n = (omega_end / omega_start)**(1 / T)
-        k = omega_start / np.log(n)
-        theta_array = (theta_start + k * (np.exp(t_array * np.log(n)) - 1)) % (2 * np.pi)
+        try:
+            T = t_array[-1]
+            n = (omega_end / omega_start)**(1 / T)
+            k = omega_start / np.log(n)
+            theta_array = (theta_start + k * (np.exp(t_array * np.log(n)) - 1)) % (2 * np.pi)
+        except RuntimeWarning:
+            return np.zeros(len(t_array)), theta_start, omega_start
+
         mono_signal_chunk = np.sin(theta_array)
         theta_last = theta_array[-1]
         omega_last = omega_end
