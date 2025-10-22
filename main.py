@@ -1,5 +1,5 @@
 # Test Signal Maker - Loudspeaker testing tool
-# Copyright (C) 2025 - Kerem Basaran
+# Copyright (C) 2026 - Kerem Basaran
 # https://github.com/kbasaran
 __email__ = "kbasaran@gmail.com"
 
@@ -51,9 +51,9 @@ import logging
 # import multiprocessing
 
 app_definitions = {"app_name": "Test Signal Maker",
-                   "version": "0.3.2",
+                   "version": "0.3.3",
                    "description": "Test Signal Maker - Loudspeaker test signal tool",
-                   "copyright": "Copyright (C) 2025 Kerem Basaran",
+                   "copyright": "Copyright (C) 2026 Kerem Basaran",
                    "icon_path": "logo/icon.ico",  # relative posix path
                    "author": "Kerem Basaran",
                    "author_short": "kbasaran",
@@ -62,7 +62,7 @@ app_definitions = {"app_name": "Test Signal Maker",
                    }
 
 # uncomment for release candidate builds
-app_definitions["version"] += "rc" + time.strftime("%y%m%d", time.localtime())
+# app_definitions["version"] += "rc" + time.strftime("%y%m%d", time.localtime())
 
 class FileImportDialog(qtw.QDialog):
 
