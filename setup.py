@@ -9,7 +9,7 @@ from pathlib import Path
 
 # Dependencies are automatically detected, but it might need fine tuning.
 build_exe_options = {
-    "packages": ["numpy"],  # necessary stil??
+    "packages": ["scipy", "numpy"],  # RecursionError in cx_Freeze if these are not provided
     "include_files": [
         (str(Path("./LICENSE")), str(Path("./LICENSE"))),
         (str(Path("./README.md")), str(Path("./README.md"))),
