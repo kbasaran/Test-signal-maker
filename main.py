@@ -1548,6 +1548,7 @@ class MainWindow(qtw.QMainWindow):
         play_in_loop_widget.stateChanged.connect(self.play_parameters_changed)
 
         stop_after_widget = qtw.QDoubleSpinBox(Minimum=0,
+                                               Maximum=1e6-1,
                                                 Value=0,
                                                 Decimals=1,
                                                 SingleStep=30,
