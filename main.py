@@ -62,7 +62,7 @@ app_definitions = {"app_name": "Test Signal Maker",
                    }
 
 # uncomment for release candidate builds
-app_definitions["version"] += "rc" + time.strftime("%y%m%d", time.localtime())
+# app_definitions["version"] += "rc" + time.strftime("%y%m%d", time.localtime())
 
 class FileImportDialog(qtw.QDialog):
 
