@@ -3,7 +3,7 @@
 
 import sys
 from cx_Freeze import setup, Executable
-from main import app_definitions
+from config.app_config import APP_DEFINITIONS
 from pathlib import Path
 # https://cx-freeze.readthedocs.io/en/stable/setup_script.html
 
@@ -13,13 +13,13 @@ build_exe_options = {
     "include_files": [
         (str(Path("./LICENSE")), str(Path("./LICENSE"))),
         (str(Path("./README.md")), str(Path("./README.md"))),
-        (str(Path(app_definitions["icon_path"])), str(Path(app_definitions["icon_path"]))),
+        (str(Path(APP_DEFINITIONS["icon_path"])), str(Path(APP_DEFINITIONS["icon_path"]))),
         ],
     "silent_level": 1,
 }
 
 bdist_msi_options = {
-    # "initial_target_dir": "[ProgramFiles64Folder]" + app_definitions['version'],  # didn't work
+    # "initial_target_dir": "[ProgramFiles64Folder]" + APP_DEFINITIONS['version'],  # didn't work
     # https://cx-freeze.readthedocs.io/en/7.0.0/bdist_msi.html
     }
 
@@ -27,18 +27,18 @@ bdist_msi_options = {
 base = "Win32GUI" if sys.platform == "win32" else None
 
 executables=[Executable("main.py",
-                        copyright=app_definitions["copyright"],
+                        copyright=APP_DEFINITIONS["copyright"],
                         base=base,
-                        shortcut_name=app_definitions["app_name"] + " v" + app_definitions["version"],
+                        shortcut_name=APP_DEFINITIONS["app_name"] + " v" + APP_DEFINITIONS["version"],
                         shortcut_dir="DesktopFolder",
-                        icon=app_definitions["icon_path"],
+                        icon=APP_DEFINITIONS["icon_path"],
                         ),
             ]
 
 setup(
-    name=app_definitions["app_name"],
-    version=app_definitions["version"],
-    description=app_definitions["description"],
+    name=APP_DEFINITIONS["app_name"],
+    version=APP_DEFINITIONS["version"],
+    description=APP_DEFINITIONS["description"],
     options={"build_exe": build_exe_options, "bdist_msi": bdist_msi_options},
     executables=executables,
 )

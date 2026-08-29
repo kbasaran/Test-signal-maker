@@ -44,25 +44,12 @@ import matplotlib.pyplot as plt  # http://matplotlib.org/
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 
+from config.app_config import APP_DEFINITIONS
 from generictools.signal_tools import TestSignal, make_fade_window_n, calculate_3rd_octave_bands
 import generictools.personalized_widgets as pwi
 from dataclasses import dataclass, fields
 import logging
 # import multiprocessing
-
-app_definitions = {"app_name": "Test Signal Maker",
-                   "version": "0.4.0",
-                   "description": "Test Signal Maker - Loudspeaker test signal tool",
-                   "copyright": "Copyright (C) 2026 Kerem Basaran",
-                   "icon_path": "logo/icon.ico",  # relative posix path
-                   "author": "Kerem Basaran",
-                   "author_short": "kbasaran",
-                   "email": "kbasaran@gmail.com",
-                   "website": "https://github.com/kbasaran",
-                   }
-
-# uncomment for release candidate builds
-app_definitions["version"] += "rc" + time.strftime("%y%m%d", time.localtime())
 
 class FileImportDialog(qtw.QDialog):
 
@@ -1137,10 +1124,10 @@ class PlayerLogger(qtc.QThread):
 @dataclass
 class Settings:
     system_gains: tuple = tuple([40] * 10)  # starts from 0. all other channel numbers in app start from 1 and use dictionaries
-    app_name: str = app_definitions["app_name"]
-    author: str = app_definitions["author"]
-    author_short: str = app_definitions["author_short"]
-    version: str = app_definitions["version"]
+    app_name: str = APP_DEFINITIONS["app_name"]
+    author: str = APP_DEFINITIONS["author"]
+    author_short: str = APP_DEFINITIONS["author_short"]
+    version: str = APP_DEFINITIONS["version"]
     preferred_device: str = "Windows DirectSound - Primary Sound Driver"
     amp_peak: float = 99.
     max_channel_count: int = 10
@@ -1254,7 +1241,7 @@ class BasicCountDownTimer(qtc.QTimer):
 
 
 class MainWindow(qtw.QMainWindow):
-    global settings, app_definitions
+    global settings, APP_DEFINITIONS
 
     gen_signal_not_ready = qtc.Signal(str)
     gen_parameters_changed = qtc.Signal()
@@ -1388,8 +1375,8 @@ class MainWindow(qtw.QMainWindow):
         # Main UI code goes here
         self.setMinimumWidth(1024)
         self.setWindowTitle(" - ".join(
-            (app_definitions["app_name"],
-             app_definitions["version"])
+            (APP_DEFINITIONS["app_name"],
+             APP_DEFINITIONS["version"])
             ))
 
         # ---- 'Generate' tab
@@ -1767,12 +1754,12 @@ class MainWindow(qtw.QMainWindow):
         about_group = qtw.QLabel(alignment=qtc.Qt.AlignCenter)
 
         about_text = "\n".join([
-        f"{app_definitions['description']}",
-        f"Version: {app_definitions['version']}",
+        f"{APP_DEFINITIONS['description']}",
+        f"Version: {APP_DEFINITIONS['version']}",
         "",
-        f"{app_definitions['copyright']}",
-        f"{app_definitions['website']}",
-        f"{app_definitions['email']}",
+        f"{APP_DEFINITIONS['copyright']}",
+        f"{APP_DEFINITIONS['website']}",
+        f"{APP_DEFINITIONS['email']}",
         "",
         "This program is free software: you can redistribute it and/or modify",
         "it under the terms of the GNU General Public License as published by",
@@ -2224,11 +2211,11 @@ def get_main_dir():
         return Path(__file__).parent
 
 
-def parse_args(app_definitions):
+def parse_args(APP_DEFINITIONS):
     import argparse
 
     description = (
-        f"{app_definitions['app_name']} - {app_definitions['copyright']}"
+        f"{APP_DEFINITIONS['app_name']} - {APP_DEFINITIONS['copyright']}"
         "\nThis program comes with ABSOLUTELY NO WARRANTY"
         "\nThis is free software, and you are welcome to redistribute it"
         "\nunder certain conditions. See LICENSE file for more details."
@@ -2236,7 +2223,7 @@ def parse_args(app_definitions):
 
     parser = argparse.ArgumentParser(prog="python main.py",
                                      description=description,
-                                     epilog={app_definitions['website']},
+                                     epilog={APP_DEFINITIONS['website']},
                                      )
     parser.add_argument('-d', '--loglevel', nargs="?",
                         choices=["debug", "info", "warning", "error", "critical"],
@@ -2251,7 +2238,7 @@ def setup_logging(level: str="warning", args=None):
     else:
         log_level = level.upper()
         
-    log_filename = Path.home().joinpath(f".{app_definitions['app_name'].lower()}.log")
+    log_filename = Path.home().joinpath(f".{APP_DEFINITIONS['app_name'].lower()}.log")
     
     file_handler = logging.FileHandler(filename=log_filename)
     stdout_handler = logging.StreamHandler(stream=sys.stdout)
@@ -2273,14 +2260,14 @@ def setup_logging(level: str="warning", args=None):
 def main():
     global settings, app_definition, logger
 
-    args = parse_args(app_definitions)
+    args = parse_args(APP_DEFINITIONS)
     logger = setup_logging(args=args)
-    settings = Settings(app_definitions["app_name"])
+    settings = Settings(APP_DEFINITIONS["app_name"])
 
     # ---- Create QApplication
     if not (app := qtw.QApplication.instance()):
         app = qtw.QApplication(sys.argv)
-        icon_path = str(get_main_dir().joinpath(app_definitions["icon_path"]))
+        icon_path = str(get_main_dir().joinpath(APP_DEFINITIONS["icon_path"]))
         app.setWindowIcon(qtg.QIcon(icon_path))
     mw = MainWindow(app)
 
