@@ -1,5 +1,11 @@
 .idea/
-package_win/
+
+# Windows packaging: track the build scripts, ignore everything the build
+# produces there (build/, dist/, *.egg-info/, venv_win/, __pycache__/).
+package_win/*
+!package_win/setup.py
+!package_win/run.ps1
+!package_win/package_msi.ps1
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
