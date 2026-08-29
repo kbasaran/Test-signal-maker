@@ -49,15 +49,15 @@ import generictools.personalized_widgets as pwi
 from dataclasses import dataclass, fields
 import logging
 # import multiprocessing
-
-app_definitions = {"app_name": "Test Signal Maker",
-                   "version": "0.3.4",
-                   "description": "Test Signal Maker - Loudspeaker test signal tool",
+ption": "Test Signal Maker - Loudspeaker test signal tool",
                    "copyright": "Copyright (C) 2026 Kerem Basaran",
                    "icon_path": "logo/icon.ico",  # relative posix path
                    "author": "Kerem Basaran",
                    "author_short": "kbasaran",
-                   "email": "kbasaran@gmail.com",
+                   "email":
+app_definitions = {"app_name": "Test Signal Maker",
+                   "version": "0.4.0",
+                   "descri"kbasaran@gmail.com",
                    "website": "https://github.com/kbasaran",
                    }
 
