@@ -1478,7 +1478,8 @@ class MainWindow(qtw.QMainWindow):
         
         # add a basic HP filter to avoid DC offset
         filters[0].widgets["type"].setCurrentText("HP")
-        filters[0].widgets["frequency"].setValue(1)
+        filters[0].widgets["frequency"].setValue(20)
+        filters[0].widgets["order"].setCurrentText("4")
 
         # Generator parameters form
         gen_form_layout = qtw.QFormLayout()
