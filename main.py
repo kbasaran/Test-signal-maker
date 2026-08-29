@@ -51,7 +51,7 @@ import logging
 # import multiprocessing
 
 app_definitions = {"app_name": "Test Signal Maker",
-                   "version": "0.3.4",
+                   "version": "0.4.0",
                    "description": "Test Signal Maker - Loudspeaker test signal tool",
                    "copyright": "Copyright (C) 2026 Kerem Basaran",
                    "icon_path": "logo/icon.ico",  # relative posix path
