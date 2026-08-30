@@ -32,7 +32,6 @@ import sounddevice as sd  # https://python-sounddevice.readthedocs.io
 
 import numpy as np
 import soundfile as sf  # https://python-soundfile.readthedocs.io/
-from scipy import signal
 import copy
 from datetime import datetime
 
@@ -295,7 +294,7 @@ class Generator(qtc.QObject):
             generated_signal = copy.deepcopy(self.imported_signal)
             generated_signal.reuse_existing(**kwargs)
             
-            self.signal_not_ready.emit(f"Analyzing signal...")
+            self.signal_not_ready.emit("Analyzing signal...")
             power_spectrum, octave_bands = generated_signal.spectrum_analysis()
             
             self.signal_ready.emit(generated_signal, power_spectrum, octave_bands)
@@ -403,8 +402,8 @@ class Player(qtc.QObject):
 
 
     def initiate_stream(self, force_sample_rate=None) -> str:
-        "Prepare the stream object with provided settings. Does not start it."
-        "Returns error message if initiation fails."
+        """Prepare the stream object with provided settings. Does not start it.
+        Returns the error message if initiation fails, empty string otherwise."""
 
         # Close any existing stream
         if hasattr(self, "stream") and self.stream is not None:
@@ -443,13 +442,17 @@ class Player(qtc.QObject):
 
         except Exception as e:
             self.stream = None
-            # PopupError(
-            #             "Unable to intiate audio stream.",
-            #             informative_text="Please check your device and the number of channels. This is the most likely reason for this error.",
-            #             post_action=None,
-            #             title="Error",
-            #             )
-            self.signal_exception.emit("Unable to initilize audio stream. Please check your device and the number of channels settings.")
+            logger.critical(f"Audio stream initiation failed. {e}")
+            err_message = ("Unable to initialize audio stream."
+                           " Please check your device and the number of channels settings."
+                           f"\n\n{e}"
+                           )
+            # signal_exception has no receiver yet while __init__ is running.
+            # That caller reads the return value instead.
+            self.signal_exception.emit(err_message)
+            return err_message
+
+        return ""
 
 
     def reset_fade_out(self):
