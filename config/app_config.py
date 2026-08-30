@@ -23,14 +23,16 @@ APP_DEFINITIONS["version"] += "rc" + time.strftime("%y%m%d", time.localtime())
 DEFAULTS = {
     "A_beep": 0.25,
 
-    # Read by generictools.graphing_widget.MatplotlibWidget. "matplotlib_style"
-    # is deliberately absent: the widget falls back to matplotlib's own defaults
-    # when it is unset, which is the look this application wants.
-    "graph_grids": "Major and minor",
+    # Read by generictools.graphing_widget.MatplotlibWidget.
+    # "matplotlib_style" is deliberately absent: the widget falls back to
+    # matplotlib's own defaults when it is unset, which is the look this
+    # application wants.
+    # "f_max" is deliberately absent as well: MainWindow.update_graph pins the
+    # top of the axis to the Nyquist frequency of the signal being shown.
+    # So are "graph_grids" and "show_legend", whose widget defaults are what
+    # this application wants, and "max_legend_size", which leaves the legend
+    # uncapped. Only "f_min" is actually configured here.
     "f_min": 10,
-    "f_max": 25000,
-    "show_legend": True,
-    "max_legend_size": 10,
 }
 
 

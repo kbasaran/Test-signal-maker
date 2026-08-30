@@ -1295,6 +1295,8 @@ class MainWindow(qtw.QMainWindow):
         # clear_graph() calls ax.clear(), which drops the axis labels too
         self.mpl_widget.set_xlabel("Frequency [Hz]")
         if generated_signal:
+            # keep the top of the axis at the Nyquist frequency of this signal
+            self.mpl_widget.set_x_limits_policy("fixed", max=generated_signal.FS / 2)
             self.mpl_widget.add_line2d(0, "Power spectral density", power_spectrum,
                                        update_figure=False,
                                        )
@@ -1302,6 +1304,8 @@ class MainWindow(qtw.QMainWindow):
                                        update_figure=False,
                                        line2d_kwargs={"drawstyle": "steps-mid"},
                                        )
+        else:
+            self.mpl_widget.set_x_limits_policy(None)
         self.mpl_widget.update_figure()
 
     def has_generated_signal(self) -> bool:
