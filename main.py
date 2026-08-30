@@ -44,7 +44,7 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 
 from config.app_config import APP_DEFINITIONS
-from generictools.signal_tools import TestSignal, make_fade_window_n, calculate_3rd_octave_bands
+from generictools.signal_tools import TestSignal, make_fade_window_n
 from generictools.graphing_widget import MatplotlibWidget
 import generictools.personalized_widgets as pwi
 from dataclasses import dataclass, fields
@@ -313,7 +313,7 @@ class Generator(qtc.QObject):
         try:
             generated_signal = TestSignal(sig_type, **kwargs)
     
-            self.signal_not_ready.emit(f"Analyzing signal...")
+            self.signal_not_ready.emit("Analyzing signal...")
             power_spectrum, octave_bands = generated_signal.spectrum_analysis()
             
             self.signal_ready.emit(generated_signal, power_spectrum, octave_bands)
