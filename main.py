@@ -900,10 +900,12 @@ class Player(qtc.QObject):
             target_omega = kwargs.get("target_freq", np.nan) * 2 * np.pi
             alpha = kwargs.get("alpha", np.nan)
 
-            if not (np.nan in (target_omega, alpha)):
+            have_omega, have_alpha = not np.isnan(target_omega), not np.isnan(alpha)
+
+            if have_omega and have_alpha:
                 raise KeyError("Cannot define both frequency and angular acceleration.")
 
-            if all([val == np.nan for val in (target_omega, alpha)]):
+            if not (have_omega or have_alpha):
                 raise ValueError("What do I play?? You need to define frequency or angular acceleration.")
 
             # define acceleration or frequency. so sweep should happen now.
