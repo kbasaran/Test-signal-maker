@@ -941,11 +941,10 @@ class Player(qtc.QObject):
             # Make sure stream is stopped first
             self.stop_play_blocking()
             
-            # Initiate a stream
-            if self.stream is not None and self.stream.samplerate == play_kwargs["signal_object"].FS:
-                self.initiate_stream()
-            else:
-                self.initiate_stream(force_sample_rate=play_kwargs["signal_object"].FS)
+            # Initiate a stream. The stream has to run at the sample rate of the
+            # signal itself, since callback_for_ugs copies its samples one for one
+            # and does not resample.
+            self.initiate_stream(force_sample_rate=play_kwargs["signal_object"].FS)
 
             self.user_gen_signal = play_kwargs["signal_object"]
             self.set_ugs_play_levels(play_kwargs["requested_voltages"])
