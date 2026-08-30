@@ -413,7 +413,7 @@ class Player(qtc.QObject):
         
         # target settings
         self._bring_sweep_states_to_zero(settings.channel_count)
-        sample_rate = force_sample_rate if force_sample_rate else settings.play_sample_rate
+        sample_rate = force_sample_rate if force_sample_rate is not None else settings.play_sample_rate
         self.ugs_play_stopwatch = -1.
         try: 
             stream_latency = float(settings.stream_latency)  # for values in s
@@ -919,14 +919,13 @@ class Player(qtc.QObject):
 
             # If no stream yet, no active sweep stream or an ongoing ugs stream
             if self.stream is None or not self.stream.active or self.play_pos:
-                self.initiate_stream()
-                
-            if self.stream is not None:    
-                self.stream.start()
-                logger.info("Sweep stream started.")
-            
-            else:
-                self.signal_exception.emit("Stream not available. Sweep could not start.")
+                # A non-empty return means the stream could not be opened. It has
+                # already been reported through signal_exception, so give up quietly.
+                if self.initiate_stream():
+                    return
+
+            self.stream.start()
+            logger.info("Sweep stream started.")
 
         except Exception as e:
             self.signal_exception.emit(str(e))
