@@ -45,6 +45,7 @@ from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as Navigatio
 
 from config.app_config import APP_DEFINITIONS
 from generictools.signal_tools import TestSignal, make_fade_window_n, calculate_3rd_octave_bands
+from generictools.graphing_widget import MatplotlibWidget
 import generictools.personalized_widgets as pwi
 from dataclasses import dataclass, fields
 import logging
@@ -1288,6 +1289,21 @@ class MainWindow(qtw.QMainWindow):
         self.poll_sound_devices_timer.timeout.connect(self.player.poll_sound_devices)
         self.player.signal_sound_devices_polled.connect(self.sound_device_info_widget.setText)
     
+    def update_graph(self, generated_signal, power_spectrum, octave_bands):
+        "Draw the spectrum of a generated signal. Clears the graph when there is none."
+        self.mpl_widget.clear_graph()
+        # clear_graph() calls ax.clear(), which drops the axis labels too
+        self.mpl_widget.set_xlabel("Frequency [Hz]")
+        if generated_signal:
+            self.mpl_widget.add_line2d(0, "Power spectral density", power_spectrum,
+                                       update_figure=False,
+                                       )
+            self.mpl_widget.add_line2d(1, "1/3 octave bands", octave_bands,
+                                       update_figure=False,
+                                       line2d_kwargs={"drawstyle": "steps-mid"},
+                                       )
+        self.mpl_widget.update_figure()
+
     def has_generated_signal(self) -> bool:
         "True when a signal has been generated and is ready to play or write."
         return isinstance(getattr(self, "generated_signal", None), TestSignal)
@@ -1300,7 +1316,7 @@ class MainWindow(qtw.QMainWindow):
 
             # Update user with the changes
             self.update_signal_info_widget.emit("Signal generated. Analyzing...")                
-            self.mpl_widget.update_plot(self.generated_signal, power_spectrum, octave_bands)
+            self.update_graph(self.generated_signal, power_spectrum, octave_bands)
             generator_info_text = self.generated_signal.analysis
 
         except Exception as e:
@@ -1314,7 +1330,7 @@ class MainWindow(qtw.QMainWindow):
     @qtc.Slot(str)
     def handler_generator_signal_not_ready(self, generator_info_text):
         "Signal not ready"
-        self.mpl_widget.clear_plot()
+        self.update_graph(None, None, None)
         self.player.stop_play()
         self.update_signal_info_widget.emit(generator_info_text)
         self.generated_signal = None
@@ -1812,7 +1828,8 @@ class MainWindow(qtw.QMainWindow):
                                   )
         mw_right_layout.addWidget(self.signal_info_widget)
 
-        self.mpl_widget = MatplotlibWidget(self)
+        self.mpl_widget = MatplotlibWidget()
+        self.mpl_widget.set_y_limits_policy("fixed", min=-70, max=0)
         self.mpl_widget.setMinimumWidth(400)
         self.mpl_widget.canvas.setSizePolicy(qtw.QSizePolicy.MinimumExpanding,
                                         qtw.QSizePolicy.Expanding,
@@ -2162,52 +2179,6 @@ class MainWindow(qtw.QMainWindow):
         self.play_button.setEnabled(True)
         # stop_button.setEnabled(False)
         self.update_play_info_widget.emit(stop_info_text)
-
-
-class MatplotlibWidget(qtw.QWidget):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-
-        fig = plt.Figure()
-        self.canvas = FigureCanvas(fig)
-        self.toolbar = NavigationToolbar(self.canvas, self)
-
-        lay = qtw.QVBoxLayout(self)
-        lay.addWidget(self.toolbar)
-        lay.addWidget(self.canvas)
-        lay.setContentsMargins(0, 0, 0, 0)
-        self.ax = fig.add_subplot(111)
-        fig.tight_layout()
-
-    @qtc.Slot(TestSignal)
-    def update_plot(self, generated_signal, power_spectrum, octave_bands):
-        self.ax.cla()
-        if generated_signal:
-            # # Power spectrum of signal
-            # FS = generated_signal.FS
-            # PowerSpect = signal.welch(generated_signal.time_sig.astype("float32"),
-            #                           fs=FS,
-            #                           nperseg=FS/4,  # defines also window size
-            #                           window="hann",
-            #                           scaling="spectrum")
-
-            # # Power per octave band of signal
-            # center_frequencies, three_oct_power = calculate_3rd_octave_bands(generated_signal.time_sig, FS, multiprocess=False)
-
-            FS = generated_signal.FS
-            self.ax.semilogx(*power_spectrum, label="Power spectral density")
-            self.ax.step(*octave_bands, where="mid", label="1/3 octave bands")
-
-            self.ax.set_xlim(10, FS/2)
-            self.ax.set_ylim(-70, 5)
-            self.ax.grid(which='minor', axis='x')
-            self.ax.grid(which='major', axis='y')
-            self.ax.legend()
-
-        self.canvas.draw()
-
-    def clear_plot(self):
-        self.update_plot(None, None, None)
 
 
 def get_main_dir():

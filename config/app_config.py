@@ -22,6 +22,15 @@ APP_DEFINITIONS["version"] += "rc" + time.strftime("%y%m%d", time.localtime())
 # the next read, so keep the two sets of keys disjoint.
 DEFAULTS = {
     "A_beep": 0.25,
+
+    # Read by generictools.graphing_widget.MatplotlibWidget. "matplotlib_style"
+    # is deliberately absent: the widget falls back to matplotlib's own defaults
+    # when it is unset, which is the look this application wants.
+    "graph_grids": "Major and minor",
+    "f_min": 10,
+    "f_max": 25000,
+    "show_legend": True,
+    "max_legend_size": 10,
 }
 
 
