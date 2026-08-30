@@ -946,10 +946,6 @@ class Player(qtc.QObject):
                 self.initiate_stream()
             else:
                 self.initiate_stream(force_sample_rate=play_kwargs["signal_object"].FS)
-            
-            if self.stream is None:    
-                self.signal_exception.emit("Stream not available. Play could not start.")
-                return
 
             self.user_gen_signal = play_kwargs["signal_object"]
             self.set_ugs_play_levels(play_kwargs["requested_voltages"])
