@@ -944,7 +944,10 @@ class Player(qtc.QObject):
             # Initiate a stream. The stream has to run at the sample rate of the
             # signal itself, since callback_for_ugs copies its samples one for one
             # and does not resample.
-            self.initiate_stream(force_sample_rate=play_kwargs["signal_object"].FS)
+            # A non-empty return means the stream could not be opened. It has already
+            # been reported through signal_exception, so just give up quietly here.
+            if self.initiate_stream(force_sample_rate=play_kwargs["signal_object"].FS):
+                return
 
             self.user_gen_signal = play_kwargs["signal_object"]
             self.set_ugs_play_levels(play_kwargs["requested_voltages"])
