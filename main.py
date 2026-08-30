@@ -1288,6 +1288,10 @@ class MainWindow(qtw.QMainWindow):
         self.poll_sound_devices_timer.timeout.connect(self.player.poll_sound_devices)
         self.player.signal_sound_devices_polled.connect(self.sound_device_info_widget.setText)
     
+    def has_generated_signal(self) -> bool:
+        "True when a signal has been generated and is ready to play or write."
+        return isinstance(getattr(self, "generated_signal", None), TestSignal)
+
     @qtc.Slot(TestSignal)
     def handler_generator_signal_ready(self, generated_signal, power_spectrum, octave_bands):
         logger.debug("Main window received signal 'Generated signal ready'")
@@ -1846,7 +1850,7 @@ class MainWindow(qtw.QMainWindow):
             sys_gain_widget.exec()
 
         def play_clicked():
-            if not hasattr(self, "generated_signal") or not isinstance(self.generated_signal, TestSignal):
+            if not self.has_generated_signal():
                 error_text = "No signal found to play."
                 informative_text = "Generate a signal using the generator tab."
                 PopupError(error_text, informative_text=informative_text)
@@ -1889,7 +1893,7 @@ class MainWindow(qtw.QMainWindow):
                 self.generate_group.setEnabled(True)
 
         def write_file_clicked():
-            if not self.generated_signal:
+            if not self.has_generated_signal():
                 error_text = "No signal found to write."
                 informative_text = "Generate a signal using the generator tab."
                 PopupError(error_text, informative_text=informative_text)
@@ -2119,7 +2123,7 @@ class MainWindow(qtw.QMainWindow):
         def gen_parameters_changed(new_param="//"):
             "When generator parameters changed"
             if (signal_type_selector.currentText() != "Imported" or
-                    (hasattr(self, "generated_signal") and isinstance(self.generated_signal, TestSignal))):
+                    self.has_generated_signal()):
                 generator_info_text = f'Parameter changed: {new_param}' + \
                     '\nPress "Generate" to generate signal.'
                 self.gen_signal_not_ready.emit(generator_info_text)
