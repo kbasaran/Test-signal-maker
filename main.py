@@ -1305,6 +1305,31 @@ class MainWindow(qtw.QMainWindow):
             self.mpl_widget.set_x_limits_policy(None)
         self.mpl_widget.update_figure()
 
+    def wait_for_threads(self, timeout_ms: int = 20_000) -> bool:
+        """Block until the worker threads have finished, up to a timeout each.
+
+        Qt aborts the process when a QThread object is destroyed while its
+        thread is still running. That happens when the application is closed
+        while the generator is busy, since a busy thread cannot act on quit()
+        until it returns to its event loop.
+
+        The timeout bounds how long closing the app can appear to hang, but a
+        thread that outlives it still leads to that abort, so the default has to
+        cover the slowest generation the GUI allows: 600 s at 96 kHz measures
+        around 14 s of generation plus analysis.
+
+        Returns False if a thread was still running when its timeout expired.
+        """
+        all_finished = True
+        for name in ("player_logger", "player_thread", "generator_thread"):
+            thread = getattr(self, name, None)
+            if thread is None:
+                continue
+            if not thread.wait(timeout_ms):
+                logger.warning(f"{name} did not finish within {timeout_ms} ms.")
+                all_finished = False
+        return all_finished
+
     @qtc.Slot()
     def shutdown_audio(self):
         """Close the output stream while the interpreter is still healthy.
@@ -2274,6 +2299,11 @@ def main():
 
     mw.show()
     app.exec()
+
+    # aboutToQuit already asked the threads to stop. Give them a chance to
+    # unwind before mw is dropped, so their QThread objects are not destroyed
+    # while still running.
+    mw.wait_for_threads()
 
 
 if __name__ == "__main__":
