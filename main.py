@@ -2029,8 +2029,15 @@ class MainWindow(qtw.QMainWindow):
                     assert file.parent.exists()
                     settings.update("file_folder", str(file.parent))
                     # is this app thing really necessary? why not use qtw.QApplication.instance()
-                    # in Nautilus the filenames come without suffixes. therefore added below line.
-                    write_args["file_name"] = Path(str(file) + "." + write_args["file_format"].lower() if str(file)[-3:].lower() != write_args["file_format"][-3:].lower() else str(file))
+                    # in Nautilus the filenames come without suffixes. therefore the lines below.
+                    # Append rather than replace, so a name such as "recording.v2"
+                    # keeps its ending instead of losing it to the suffix.
+                    suffix = "." + write_args["file_format"].lower()
+                    if file.suffix.lower() == suffix:
+                        file = file.with_suffix(suffix)  # normalize e.g. .FLAC to .flac
+                    else:
+                        file = file.with_name(file.name + suffix)
+                    write_args["file_name"] = file
                     writer = FileWriter(app, self.generated_signal, **write_args)
                     writer.file_write_successful.connect(write_file_info_widget.setText)
                     writer.file_write_busy.connect(write_file_info_widget.setText)
