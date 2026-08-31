@@ -1605,13 +1605,21 @@ class MainWindow(qtw.QMainWindow):
         play_in_loop_widget = qtw.QCheckBox(checked=True)
         play_in_loop_widget.stateChanged.connect(self.play_parameters_changed)
 
+        # BasicCountDownTimer passes this to QTimer.setInterval, whose C++ int
+        # argument overflows above 2**31-1 ms, i.e. above 35791.3 minutes.
         stop_after_widget = qtw.QDoubleSpinBox(Minimum=0,
-                                               Maximum=1e6-1,
+                                               Maximum=35700,
                                                 Value=0,
                                                 Decimals=1,
                                                 SingleStep=30,
                                                 ToolTip=("Stop the playback after the user defined period of time"
                                                          " is passed. Value is in minutes. '0' means disabled."
+                                                         "\nMaximum allowed value is 35700 minutes."
+                                                         " This is limited by the 32 bit timer interval"
+                                                         " of the graphical interface toolkit."
+                                                         "\n1 day = 1440 minutes"
+                                                         "\n1 week = 10080 minutes"
+                                                         "\n3 weeks = 30240 minutes"
                                                          ),
                                                 )
         stop_after_widget.valueChanged.connect(self.play_parameters_changed)
