@@ -2302,7 +2302,7 @@ def main():
 
     args = parse_args(APP_DEFINITIONS)
     logger = setup_logging(args=args)
-    settings = Settings(APP_DEFINITIONS["app_name"])
+    settings = Settings()
 
     # ---- Create QApplication
     if not (app := qtw.QApplication.instance()):
