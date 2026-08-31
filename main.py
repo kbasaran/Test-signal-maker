@@ -602,13 +602,19 @@ class Player(qtc.QObject):
         Returns a tuple with,
         one channel array of theta, last value of theta, last value of omega
         """
-        try:
-            T = t_array[-1]
-            n = (omega_end / omega_start)**(1 / T)
-            k = omega_start / np.log(n)
-            theta_array = (theta_start + k * (np.exp(t_array * np.log(n)) - 1)) % (2 * np.pi)
-        except RuntimeWarning:
+        # An exponential sweep is undefined for these. The caller already avoids
+        # them; this keeps the function safe on its own.
+        if omega_start <= 0 or omega_end <= 0 or omega_end == omega_start:
             return np.zeros(len(t_array)), theta_start, omega_start
+
+        T = t_array[-1]
+        # log_n is log((omega_end / omega_start)**(1 / T)), computed without
+        # forming that power. 1/T is samplerate/frames, so the intermediate
+        # overflows to inf for quite ordinary frequency ratios on small
+        # callback blocks, and inf then turns the whole buffer into nan.
+        log_n = np.log(omega_end / omega_start) / T
+        k = omega_start / log_n
+        theta_array = (theta_start + k * (np.exp(t_array * log_n) - 1)) % (2 * np.pi)
 
         mono_signal_chunk = np.sin(theta_array)
         theta_last = theta_array[-1]
