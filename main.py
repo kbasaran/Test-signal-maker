@@ -406,9 +406,11 @@ class Player(qtc.QObject):
         """Prepare the stream object with provided settings. Does not start it.
         Returns the error message if initiation fails, empty string otherwise."""
 
-        # Close any existing stream
+        # Close any existing stream. Closing discards pending buffers anyway, so a
+        # stream that would not stop in time is not a reason to give up here.
         if hasattr(self, "stream") and self.stream is not None:
-            self.stop_play_blocking()
+            if not self.stop_play(blocking=True):
+                logger.warning("Closing a stream that did not stop cleanly.")
             self.stream.close()
         
         # target settings
@@ -944,7 +946,7 @@ class Player(qtc.QObject):
         "UGS means 'user generated signal'"
         try:
             # Make sure stream is stopped first
-            self.stop_play_blocking()
+            self.stop_play(blocking=True)
             
             # Initiate a stream. The stream has to run at the sample rate of the
             # signal itself, since callback_for_ugs copies its samples one for one
@@ -1003,8 +1005,20 @@ class Player(qtc.QObject):
             if self.stream is not None:
                 self.stream.close(ignore_errors=True)
 
-    @qtc.Slot(str)
-    def stop_play(self):
+    @qtc.Slot()
+    def stop_play(self, blocking: bool = False, timeout_ms: int = 1000) -> bool:
+        """Fade the playback out and stop it.
+
+        With blocking, wait for the stream to actually become inactive and
+        return False if it still was not after timeout_ms. Polling rather than
+        spinning, so it neither burns a core nor waits forever if the callback
+        never stops. Without blocking the fade is only requested, and the return
+        value says nothing about whether it completed.
+
+        Connect this to a signal that carries arguments only through a wrapper
+        that drops them, or they bind to blocking. No form of the Slot decorator
+        prevents that.
+        """
         if self.stream is not None and self.stream.active:
             if np.isnan(self.fade_out_frames["remaining"]):
                 self.fade_out_frames = {"remaining": self.fade_window_size,
@@ -1017,12 +1031,20 @@ class Player(qtc.QObject):
 
         else:
             logger.debug("Stream was not active when stop was requested.")
-    
-    def stop_play_blocking(self):
-        self.stop_play()
-        # Block until
-        while self.stream is not None and self.stream.active:
-            pass
+
+        if not blocking:
+            return True
+
+        poll_ms = 10
+        for _ in range(max(1, timeout_ms // poll_ms)):
+            if self.stream is None or not self.stream.active:
+                return True
+            qtc.QThread.msleep(poll_ms)
+
+        stopped = self.stream is None or not self.stream.active
+        if not stopped:
+            logger.warning(f"Stream was still active {timeout_ms} ms after stop was requested.")
+        return stopped
 
     @qtc.Slot(float)
     def set_ugs_play_levels(self, voltage_dict: dict) -> None:
@@ -1062,7 +1084,7 @@ class Player(qtc.QObject):
         """Sets channel for sweep as an integer value.
         The integer for channel is user friendly, starting from 1.
         """
-        self.stop_play_blocking()  # for user hearing safety
+        self.stop_play(blocking=True)  # for user hearing safety
 
         self._sweep_channel = int(channel)
         self.set_sweep_level(self._sweep_voltage)
@@ -2025,18 +2047,10 @@ class MainWindow(qtw.QMainWindow):
 
         def choose_import_file():
             try:
-                self.player.stop_play()
-
                 # Wait if playback is going on. This call does file access and can cause
-                # buffer underrun in player callback
-                for timer in range(10):
-                    if self.player.stream.active:
-                        qtc.QThread.msleep(100)
-                    if timer == 99:
-                        raise RuntimeError("Could not stop player thread.")
-                    else:
-                        qtc.QThread.msleep(100)
-                        break
+                # buffer underrun in player callback.
+                if not self.player.stop_play(blocking=True):
+                    raise RuntimeError("Could not stop the player.")
 
                 # add functionality for remembering latest file_folder
                 file_folder = Path(settings.file_folder)
@@ -2145,8 +2159,10 @@ class MainWindow(qtw.QMainWindow):
 
         # ---- Connection of pushbuttons
         self.play_button.clicked.connect(play_clicked)
-        stop_button.clicked.connect(self.player.stop_play)
-        sweep_stop_button.clicked.connect(self.player.stop_play)
+        # clicked() carries the button's checked state. Drop it here rather than
+        # letting it bind to a parameter of stop_play.
+        stop_button.clicked.connect(lambda *_: self.player.stop_play())
+        sweep_stop_button.clicked.connect(lambda *_: self.player.stop_play())
         generate_button.clicked.connect(generate_clicked)
         sys_gain_adjust_button.clicked.connect(gain_and_levels_button_clicked)
         sys_gain_adjust_button_2.clicked.connect(gain_and_levels_button_clicked)
