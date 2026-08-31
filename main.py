@@ -1305,6 +1305,20 @@ class MainWindow(qtw.QMainWindow):
             self.mpl_widget.set_x_limits_policy(None)
         self.mpl_widget.update_figure()
 
+    @qtc.Slot()
+    def shutdown_audio(self):
+        """Close the output stream while the interpreter is still healthy.
+
+        Without this the stream is left running past the event loop and is only
+        torn down by PortAudio's Pa_Terminate during interpreter shutdown, with
+        the callback still reaching into objects that are being finalized.
+        Aborting rather than stopping avoids waiting on the fade-out.
+        """
+        if self.player.stream is not None:
+            self.player.stream.abort()
+            self.player.stream.close()
+            logger.debug("Output stream aborted and closed for shutdown.")
+
     def has_generated_signal(self) -> bool:
         "True when a signal has been generated and is ready to play or write."
         return isinstance(getattr(self, "generated_signal", None), TestSignal)
@@ -1377,6 +1391,11 @@ class MainWindow(qtw.QMainWindow):
         self.request_generator_process_imported_file.connect(self.generator.process_imported_file)
         self.request_generator_import_file.connect(self.generator.import_file)
         self.request_generator_clear_imported_file.connect(self.generator.clear_imported_file)
+
+        # Cleaning up on exit. The stream has to go first: connecting after the
+        # thread quits would leave this queued on an event loop that is already
+        # shutting down.
+        qtw.QApplication.instance().aboutToQuit.connect(self.shutdown_audio)
 
         # Cleaning threads on exit
         qtw.QApplication.instance().aboutToQuit.connect(self.player_thread.quit)
