@@ -1741,27 +1741,32 @@ class MainWindow(qtw.QMainWindow):
                                   )
 
         voltage_spin_box_label = qtw.QLabel("Voltage")
-        voltage_spin_box_label.setSizePolicy(qtw.QSizePolicy.Preferred, qtw.QSizePolicy.Maximum)
-        voltage_spin_box = qtw.QDoubleSpinBox(Font=qtg.QFont("AnyStyle", 18))
+        voltage_spin_box_label.setSizePolicy(qtw.QSizePolicy.Minimum, qtw.QSizePolicy.Minimum)
+        voltage_spin_box = qtw.QDoubleSpinBox(Font=qtg.QFont("AnyStyle", 22),
+                                              decimals=2,
+                                              )
         voltage_spin_box.setValue(1)
 
         # voltage_spin_box.lineEdit().setReadOnly(True)  # for safety during development
         voltage_spin_box.setSingleStep(0.1)
 
         sweep_channel_label = qtw.QLabel("Channel")
-        sweep_channel_label.setSizePolicy(qtw.QSizePolicy.Preferred, qtw.QSizePolicy.Maximum)
+        sweep_channel_label.setSizePolicy(qtw.QSizePolicy.Minimum, qtw.QSizePolicy.Minimum)
         sweep_channel = qtw.QSpinBox(Maximum=int(settings.channel_count),
-                                     Font=qtg.QFont("AnyStyle", 18),
+                                     Font=qtg.QFont("AnyStyle", 22),
                                      Minimum=1,
                                      )
+
         sweep_stop_button = qtw.QPushButton("Stop",
                                             MinimumSize=qtc.QSize(220, 90),
-                                            # Font=qtg.QFont("AnyStyle", 12),
+                                            Font=qtg.QFont("AnyStyle", 18),
                                             )
+
         sys_gain_adjust_button_2 = qtw.QPushButton("Define system gain parameters",
-                                                   MinimumSize=qtc.QSize(220, 30),
-                                                   Font=qtg.QFont("AnyStyle", 8),
+                                                   # MinimumSize=qtc.QSize(220, 30),
+                                                   Font=qtg.QFont("AnyStyle", 10),
                                                    )
+        sys_gain_adjust_button_2.setSizePolicy(qtw.QSizePolicy.Minimum, qtw.QSizePolicy.Minimum)
 
         # Other settings section layout
         # Message section
