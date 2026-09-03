@@ -13,7 +13,7 @@ APP_DEFINITIONS = {"app_name": "Test Signal Maker",
                    "website": "https://github.com/kbasaran",
                    }
 # uncomment for release candidate builds
-APP_DEFINITIONS["version"] += "rc" + time.strftime("%y%m%d", time.localtime())
+# APP_DEFINITIONS["version"] += "rc" + time.strftime("%y%m%d", time.localtime())
 
 # Only the keys that generictools itself reads. The application's own settings
 # are still owned by the `Settings` dataclass in main.py, which stores raw Qt
