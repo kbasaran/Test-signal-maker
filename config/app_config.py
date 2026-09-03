@@ -3,7 +3,7 @@ import logging
 from generictools.settings import SettingsManager
 
 APP_DEFINITIONS = {"app_name": "Test Signal Maker",
-                   "version": "0.4.2",
+                   "version": "0.4.3",
                    "description": "Test Signal Maker - Loudspeaker test signal tool",
                    "copyright": "Copyright (C) 2026 Kerem Basaran",
                    "icon_path": "logo/icon.ico",  # relative posix path
