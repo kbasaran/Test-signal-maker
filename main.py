@@ -1754,12 +1754,20 @@ class MainWindow(qtw.QMainWindow):
                                      Minimum=1,
                                      )
 
-        # Windows styles don't reserve enough width for the buttons; add a button's worth.
+        def fit_spin_box(spin_box):
+            # Some styles (the Windows 11 one) scale the up/down buttons with the box
+            # height, so the width in sizeHint(), which assumes the box's natural
+            # height, stops covering them once we make the box taller and they end up
+            # drawn over the digits. A whole box height of slack is more than any
+            # style needs; the boxes are centered, so the surplus is just padding.
+            height = round(spin_box.sizeHint().height() * 1.4)
+            spin_box.setFixedHeight(height)
+            spin_box.setFixedWidth(spin_box.sizeHint().width() + height)
+
         for spin_box in (voltage_spin_box, sweep_channel):
-            spin_box.setMinimumWidth(spin_box.sizeHint().width() + spin_box.sizeHint().height() / 2)
-            spin_box.setFixedHeight(spin_box.sizeHint().height() * 1.4)
             spin_box.setAlignment(qtc.Qt.AlignCenter)
-            spin_box.setSizePolicy(qtw.QSizePolicy.Minimum, qtw.QSizePolicy.Minimum)
+            spin_box.setSizePolicy(qtw.QSizePolicy.Fixed, qtw.QSizePolicy.Fixed)
+            fit_spin_box(spin_box)
 
         sweep_stop_button = qtw.QPushButton("Stop",
                                             MinimumSize=qtc.QSize(220, 90),
@@ -2122,6 +2130,7 @@ class MainWindow(qtw.QMainWindow):
         # Disabling voltage widgets for disabled channels
         def update_gui_for_change_in_number_of_channels():
             sweep_channel.setMaximum(int(settings.channel_count))
+            fit_spin_box(sweep_channel)  # a wider maximum needs more room for digits
             for i, level_widget in level_widgets.items():
                 level_widget.setEnabled(i <= int(settings.channel_count))
         update_gui_for_change_in_number_of_channels()
