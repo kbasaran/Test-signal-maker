@@ -34,7 +34,11 @@ build_exe_options = {
         (str(ROOT / "README.md"), "README.md"),
         (str(ROOT / APP_DEFINITIONS["icon_path"]), APP_DEFINITIONS["icon_path"]),
         ],
-    "silent_level": 1,
+    # 0 prints every module cx_Freeze copies, on top of the missing-module and
+    # missing-dependency reports that levels below 2 and 3 already show. Verbose,
+    # but it is the only way to confirm from the build log that something made it
+    # into the package.
+    "silent_level": 0,
 }
 
 # The app reads and writes plain .wav files, so no file extension is registered --
