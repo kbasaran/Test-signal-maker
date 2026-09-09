@@ -1741,27 +1741,44 @@ class MainWindow(qtw.QMainWindow):
                                   )
 
         voltage_spin_box_label = qtw.QLabel("Voltage")
-        voltage_spin_box_label.setSizePolicy(qtw.QSizePolicy.Preferred, qtw.QSizePolicy.Maximum)
-        voltage_spin_box = qtw.QDoubleSpinBox(Font=qtg.QFont("AnyStyle", 18))
+        voltage_spin_box = qtw.QDoubleSpinBox(Font=qtg.QFont("AnyStyle", 22),
+                                              decimals=2,
+                                              )
         voltage_spin_box.setValue(1)
-
-        # voltage_spin_box.lineEdit().setReadOnly(True)  # for safety during development
         voltage_spin_box.setSingleStep(0.1)
+        # voltage_spin_box.lineEdit().setReadOnly(True)  # for safety during development
 
         sweep_channel_label = qtw.QLabel("Channel")
-        sweep_channel_label.setSizePolicy(qtw.QSizePolicy.Preferred, qtw.QSizePolicy.Maximum)
         sweep_channel = qtw.QSpinBox(Maximum=int(settings.channel_count),
-                                     Font=qtg.QFont("AnyStyle", 18),
+                                     Font=qtg.QFont("AnyStyle", 22),
                                      Minimum=1,
                                      )
+
+        def fit_spin_box(spin_box):
+            # Some styles (the Windows 11 one) scale the up/down buttons with the box
+            # height, so the width in sizeHint(), which assumes the box's natural
+            # height, stops covering them once we make the box taller and they end up
+            # drawn over the digits. A whole box height of slack is more than any
+            # style needs; the boxes are centered, so the surplus is just padding.
+            height = round(spin_box.sizeHint().height() * 1.4)
+            spin_box.setFixedHeight(height)
+            spin_box.setFixedWidth(spin_box.sizeHint().width() + height)
+
+        for spin_box in (voltage_spin_box, sweep_channel):
+            spin_box.setAlignment(qtc.Qt.AlignCenter)
+            spin_box.setSizePolicy(qtw.QSizePolicy.Fixed, qtw.QSizePolicy.Fixed)
+            fit_spin_box(spin_box)
+
         sweep_stop_button = qtw.QPushButton("Stop",
                                             MinimumSize=qtc.QSize(220, 90),
-                                            # Font=qtg.QFont("AnyStyle", 12),
+                                            Font=qtg.QFont("AnyStyle", 18),
                                             )
+
         sys_gain_adjust_button_2 = qtw.QPushButton("Define system gain parameters",
-                                                   MinimumSize=qtc.QSize(220, 30),
-                                                   Font=qtg.QFont("AnyStyle", 8),
+                                                   # MinimumSize=qtc.QSize(220, 30),
+                                                   Font=qtg.QFont("AnyStyle", 10),
                                                    )
+        sys_gain_adjust_button_2.setSizePolicy(qtw.QSizePolicy.Minimum, qtw.QSizePolicy.Minimum)
 
         # Other settings section layout
         # Message section
@@ -2113,6 +2130,7 @@ class MainWindow(qtw.QMainWindow):
         # Disabling voltage widgets for disabled channels
         def update_gui_for_change_in_number_of_channels():
             sweep_channel.setMaximum(int(settings.channel_count))
+            fit_spin_box(sweep_channel)  # a wider maximum needs more room for digits
             for i, level_widget in level_widgets.items():
                 level_widget.setEnabled(i <= int(settings.channel_count))
         update_gui_for_change_in_number_of_channels()

@@ -25,7 +25,7 @@ from config.app_config import APP_DEFINITIONS
 # sources so the build does not depend on the current directory, root-relative
 # destinations so the frozen layout mirrors the source tree.
 build_exe_options = {
-    "packages": ["scipy", "numpy",
+    "packages": ["scipy", "numpy", "pandas",
                  "sounddevice", "_sounddevice_data",  # bundle PortAudio native binary
                  "soundfile", "_soundfile_data",  # bundle libsndfile native binary
                  "tabulate"],  # used dynamically by pandas.to_markdown()
